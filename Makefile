@@ -90,8 +90,8 @@ else ifneq (,$(findstring ios,$(platform)))
 	endif
          HAVE_NEON=1
 ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
-	CC = cc -arch arm64 -isysroot $(IOSSDK) -marm
-	CXX = c++ -arch arm64 -isysroot $(IOSSDK) -marm
+	CC = cc -arch arm64 -isysroot $(IOSSDK)
+	CXX = c++ -arch arm64 -isysroot $(IOSSDK)
 else
 	CC = cc -arch armv7 -isysroot $(IOSSDK) -marm
 	CXX = c++ -arch armv7 -isysroot $(IOSSDK) -marm
