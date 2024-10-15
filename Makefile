@@ -103,7 +103,8 @@ else
         MINVERSION = -miphoneos-version-min=6.0
 endif
 	CXXFLAGS += $(MINVERSION)
-        CFLAGS += -DIOS -DDONT_WANT_ARM_OPTIMIZATIONS
+        CFLAGS += -DIOS -DDONT_WANT_ARM_OPTIMIZATIONS $(MINVERSION)
+        LDFLAGS += $(MINVERSION)
         HAVE_NEON = 0
 
 else ifeq ($(platform), tvos-arm64)
@@ -112,7 +113,7 @@ else ifeq ($(platform), tvos-arm64)
         SHARED := -dynamiclib
         fpic := -fPIC
         ifeq ($(IOSSDK),)
-                IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
+                IOSSDK := $(shell xcodebuild -version -sdk appletvos Path)
         endif
         CC = cc -arch arm64 -isysroot $(IOSSDK)
         CXX = c++ -arch arm64 -isysroot $(IOSSDK)
@@ -121,6 +122,10 @@ else ifeq ($(platform), tvos-arm64)
         ARCH := arm64
         HAVE_NEON = 0
 
+        MINVERSION = -mappletvos-version-min=11.0
+        CFLAGS += $(MINVERSION)
+        CXXFLAGS += $(MINVERSION)
+        LDFLAGS += $(MINVERSION)
 # Theos
 else ifeq ($(platform), theos_ios)
 	TARGET_CXX=c++
