@@ -355,6 +355,11 @@ else
 
 endif
 
+# webOS (32-bit)
+ifneq (,$(findstring webos,$(CROSS_COMPILE)$(findstring starfish,$(CROSS_COMPILE))))
+	HAVE_NEON = 1
+endif
+
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -O0 -g
 	CFLAGS += -O0 -g
