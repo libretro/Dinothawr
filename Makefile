@@ -356,7 +356,7 @@ else
 endif
 
 # webOS (32-bit)
-ifneq (,$(findstring webos,$(CROSS_COMPILE)$(findstring starfish,$(CROSS_COMPILE))))
+ifneq (,$(or $(findstring webos,$(CROSS_COMPILE)),$(findstring starfish,$(CROSS_COMPILE))))
 	HAVE_NEON = 1
 endif
 
