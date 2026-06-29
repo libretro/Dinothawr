@@ -5,6 +5,7 @@
 #include "tilemap.hpp"
 #include "font.hpp"
 #include "audio/mixer.hpp"
+#include "audio/mixer_i16.h"
 
 #include <string>
 #include <functional>
@@ -16,6 +17,11 @@
 namespace Icy
 {
    Audio::Mixer& get_mixer();
+   /* Integer audio backend, used when the frontend does not advertise
+    * float output. get_mixer_i16() is non-NULL only in that case;
+    * audio_is_float() reports which pipeline is live. */
+   mixer_i16_t* get_mixer_i16();
+   bool audio_is_float();
    const std::string& get_basedir();
 
    enum class Input : unsigned
@@ -34,11 +40,15 @@ namespace Icy
    {
 #ifndef USE_CXX03
       public:
+         ~SFXManager();
          void add_stream(const std::string &ident, const std::string &path);
          void play_sfx(const std::string &ident, float volume = 1.0f) const;
 
       private:
          std::map<std::string, std::shared_ptr<std::vector<float>>> effects;
+         /* int16 pipeline: decoded WAV kept as reference-counted int16
+          * PCM, played as i16_pcm streams into the int16 mixer. */
+         std::map<std::string, i16_buf_t*> effects_i16;
 #else
       public:
          void add_stream(const std::string &ident, const std::string &path) {}
@@ -66,6 +76,8 @@ namespace Icy
          std::vector<Track> tracks;
          bool first;
          unsigned last;
+
+         unsigned next_index();
 #else
       public:
          struct Track

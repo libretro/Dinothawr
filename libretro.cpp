@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <cmath>
+#include <mutex>
 
 #include "game.hpp"
 #include "utils.hpp"
@@ -21,6 +22,23 @@ static string game_path;
 static string game_path_dir;
 
 static Audio::Mixer mixer;
+/* Integer audio backend, created only when the frontend does not
+ * advertise float output. When live, all SFX/BG audio flows through this
+ * deterministic int16 mixer instead of the float one. */
+static mixer_i16_t *mixer_i16 = NULL;
+static bool s_audio_float = false;
+
+/* Serialises int16-mixer access between the main thread (SFX/BG mutation)
+ * and the frontend audio-callback thread, mirroring the float mixer's
+ * internal mutex. C language linkage so the function-pointer type matches
+ * the mixer's i16_lock_fn cleanly. */
+static std::recursive_mutex mixer_i16_mutex;
+extern "C" {
+   static void mixer_i16_lock_cb(void *data)
+   { static_cast<std::recursive_mutex*>(data)->lock(); }
+   static void mixer_i16_unlock_cb(void *data)
+   { static_cast<std::recursive_mutex*>(data)->unlock(); }
+}
 static SFXManager sfx;
 static BGManager bg_music;
 
@@ -49,6 +67,8 @@ static bool present_frame;
 namespace Icy
 {
    Audio::Mixer& get_mixer() { return mixer; }
+   mixer_i16_t* get_mixer_i16() { return mixer_i16; }
+   bool audio_is_float() { return s_audio_float; }
    const string& get_basedir() { return game_path_dir; }
    SFXManager& get_sfx() { return sfx; }
    BGManager& get_bg() { return bg_music; }
@@ -156,7 +176,7 @@ static void audio_callback(void)
       return;
    }
 
-   mixer.render(audio_buffer, AUDIO_FRAMES);
+   mixer_i16_render(mixer_i16, audio_buffer, AUDIO_FRAMES);
    for (unsigned i = 0; i < AUDIO_FRAMES; )
    {
       unsigned written = audio_batch_cb(audio_buffer + 2 * i, AUDIO_FRAMES - i);
@@ -167,6 +187,7 @@ static void audio_callback(void)
 static void audio_set_state(bool enable)
 {
    mixer.enable(enable);
+   mixer_i16_set_enabled(mixer_i16, enable); /* NULL-safe */
 }
 
 static void frame_time_cb(retro_usec_t usec)
@@ -333,8 +354,8 @@ bool retro_load_game(const struct retro_game_info* info)
    use_audio_cb = environ_cb(RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK, &cb);
 
    /* Negotiate float audio output. If the frontend supports it, the
-    * mixer's float output is delivered directly; otherwise we keep the
-    * int16 path via audio_batch_cb. */
+    * mixer's float output is delivered directly; otherwise we run the
+    * deterministic int16 pipeline (int16 mixer + int16 SFX/BG decode). */
    {
       struct retro_audio_sample_float_callback float_cb;
       float_cb.batch = NULL;
@@ -343,6 +364,23 @@ bool retro_load_game(const struct retro_game_info* info)
          audio_batch_float_cb = float_cb.batch;
       else
          audio_batch_float_cb = NULL;
+
+      s_audio_float = (audio_batch_float_cb != NULL);
+
+      /* (Re)create the int16 mixer for the integer fallback path. Freeing
+       * any previous instance also tears down its streams; the managers
+       * keep their decoded buffers separately, so this is safe on reload. */
+      if (mixer_i16)
+      {
+         mixer_i16_free(mixer_i16);
+         mixer_i16 = NULL;
+      }
+      if (!s_audio_float)
+      {
+         mixer_i16 = mixer_i16_new();
+         mixer_i16_set_lock(mixer_i16, mixer_i16_lock_cb,
+               mixer_i16_unlock_cb, &mixer_i16_mutex);
+      }
    }
 
    struct retro_input_descriptor desc[] = {
@@ -383,6 +421,11 @@ bool retro_load_game_special(unsigned, const struct retro_game_info*, size_t)
 void retro_unload_game(void)
 {
    game.reset();
+   if (mixer_i16)
+   {
+      mixer_i16_free(mixer_i16);
+      mixer_i16 = NULL;
+   }
 }
 
 unsigned retro_get_region(void)
