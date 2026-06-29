@@ -28,15 +28,27 @@ extern "C" {
 
 struct retro_core_option_definition option_defs_us[] = {
    {
-      "dino_timer",
-      "Timer as FPS reference",
-      "Use timer as FPS reference.",
+      "dino_framerate",
+      "Frame rate",
+      "Frame rate the core runs at. 'Auto' follows the frontend's configured "
+      "refresh rate. Note: Dinothawr's logic is fixed-step, so frame rates "
+      "above 60 run the game (and its animations) proportionally faster; "
+      "audio output stays at 44.1 kHz.",
       {
-         { "enabled",  NULL },
-         { "disabled",  NULL },
-         { NULL, NULL},
+         { "Auto", NULL },
+         { "50",   NULL },
+         { "60",   NULL },
+         { "72",   NULL },
+         { "75",   NULL },
+         { "90",   NULL },
+         { "100",  NULL },
+         { "119",  NULL },
+         { "120",  NULL },
+         { "144",  NULL },
+         { "240",  NULL },
+         { NULL, NULL },
       },
-      "enabled",
+      "60",
    },
    { NULL, NULL, NULL, { NULL, NULL }, NULL },
 };

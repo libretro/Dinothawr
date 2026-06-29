@@ -42,9 +42,6 @@ extern "C" {
 static SFXManager sfx;
 static BGManager bg_music;
 
-static bool use_frame_time_cb;
-static bool option_use_frame_time;
-
 retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
 static retro_audio_sample_t audio_cb;
@@ -58,11 +55,6 @@ static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
 
-static retro_usec_t frame_time;
-static retro_usec_t time_reference;
-static retro_usec_t total_time;
-static bool present_frame;
-
 namespace Icy
 {
    Audio::Mixer& get_mixer() { return mixer; }
@@ -73,9 +65,17 @@ namespace Icy
    BGManager& get_bg() { return bg_music; }
 }
 
-#define AUDIO_FRAMES (44100 / 60)
-static int16_t audio_buffer[2 * AUDIO_FRAMES];
-static float   audio_buffer_f[2 * AUDIO_FRAMES];
+#define AUDIO_SAMPLE_RATE 44100
+/* One audio block is emitted per emulated frame; its size (samples per
+ * frame) is AUDIO_SAMPLE_RATE / framerate, so the delivered rate stays
+ * AUDIO_SAMPLE_RATE for any frame rate. Buffers are sized for the lowest
+ * frame rate we clamp to (30). */
+#define AUDIO_MAX_FRAMES 2048
+static unsigned audio_frames = AUDIO_SAMPLE_RATE / 60;
+static int16_t  audio_buffer  [2 * AUDIO_MAX_FRAMES];
+static float    audio_buffer_f[2 * AUDIO_MAX_FRAMES];
+static double   g_framerate = 60.0;
+static bool     s_av_info_queried = false;
 
 static void check_system_specs(void)
 {
@@ -117,12 +117,17 @@ void retro_get_system_info(struct retro_system_info *info)
    info->valid_extensions = "game";
 }
 
+static void get_av_info(struct retro_system_av_info *info)
+{
+   unsigned width = Game::fb_width, height = Game::fb_height;
+   info->timing   = { g_framerate, (double)AUDIO_SAMPLE_RATE };
+   info->geometry = { width, height, width, height };
+}
+
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
-   info->timing = { 60.0, 44100.0 };
-   
-   unsigned width = Game::fb_width, height = Game::fb_height;
-   info->geometry = { width, height, width, height };
+   get_av_info(info);
+   s_av_info_queried = true;
 }
 
 
@@ -162,45 +167,89 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 
 static void audio_callback(void)
 {
+   unsigned n = audio_frames;
+
    /* Float-native path: the mixer renders float, so when the frontend
     * accepts float we push it straight through - no float->int16 step. */
    if (audio_batch_float_cb)
    {
-      mixer.render(audio_buffer_f, AUDIO_FRAMES);
-      for (unsigned i = 0; i < AUDIO_FRAMES; )
+      mixer.render(audio_buffer_f, n);
+      for (unsigned i = 0; i < n; )
       {
-         unsigned written = audio_batch_float_cb(audio_buffer_f + 2 * i, AUDIO_FRAMES - i);
+         unsigned written = audio_batch_float_cb(audio_buffer_f + 2 * i, n - i);
          i += written;
       }
       return;
    }
 
-   mixer_i16_render(mixer_i16, audio_buffer, AUDIO_FRAMES);
-   for (unsigned i = 0; i < AUDIO_FRAMES; )
+   mixer_i16_render(mixer_i16, audio_buffer, n);
+   for (unsigned i = 0; i < n; )
    {
-      unsigned written = audio_batch_cb(audio_buffer + 2 * i, AUDIO_FRAMES - i);
+      unsigned written = audio_batch_cb(audio_buffer + 2 * i, n - i);
       i += written;
    }
 }
 
-static void frame_time_cb(retro_usec_t usec)
+/* Resolve the configured frame rate. "Auto" follows the frontend's target
+ * refresh rate; otherwise the literal value is used. Clamped to the range
+ * the audio buffers are sized for. */
+static double resolve_framerate(void)
 {
-   frame_time = usec;
+   retro_variable var = { "dino_framerate" };
+   double fps = 60.0;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "Auto"))
+      {
+         float target = 0.0f;
+         if (environ_cb(RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE, &target)
+               && target >= 1.0f)
+            fps = target;
+      }
+      else
+         fps = atof(var.value);
+   }
+
+   if (fps < 30.0)
+      fps = 30.0;
+   else if (fps > 360.0)
+      fps = 360.0;
+   return fps;
+}
+
+/* Apply the configured frame rate. The frontend drives retro_run at this
+ * rate and the core runs exactly one tick per call, so timing.fps is the
+ * game rate; audio_frames keeps delivered audio at AUDIO_SAMPLE_RATE. If it
+ * changes after the frontend has read the av info (a live option change),
+ * push the new timing with SET_SYSTEM_AV_INFO. */
+static void apply_framerate(void)
+{
+   double fps = resolve_framerate();
+   if (fps == g_framerate)
+      return;
+
+   g_framerate  = fps;
+   audio_frames = (unsigned)(AUDIO_SAMPLE_RATE / fps + 0.5);
+   if (audio_frames < 1)
+      audio_frames = 1;
+   else if (audio_frames > AUDIO_MAX_FRAMES)
+      audio_frames = AUDIO_MAX_FRAMES;
+
+   if (log_cb)
+      log_cb(RETRO_LOG_INFO, "Dinothawr: frame rate %.4g Hz (%u samples/frame).\n", fps, audio_frames);
+
+   if (s_av_info_queried && game)
+   {
+      struct retro_system_av_info info;
+      get_av_info(&info);
+      environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
+   }
 }
 
 static void update_variables()
 {
-   retro_variable var = { "dino_timer" };
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "enabled"))
-         option_use_frame_time = true;
-      else if (!strcmp(var.value, "disabled"))
-         option_use_frame_time = false;
-
-      if (log_cb)
-         log_cb(RETRO_LOG_INFO, "Dinothawr: Using timer as FPS reference: %s.\n", option_use_frame_time ? "enabled" : "disabled");
-   }
+   apply_framerate();
 }
 
 static void check_variables()
@@ -213,42 +262,19 @@ static void check_variables()
 void retro_run(void)
 {
    check_variables();
-   if (!use_frame_time_cb || !option_use_frame_time)
-      frame_time = time_reference;
 
    input_poll_cb();
 
-   if (frame_time < (time_reference >> 1))
-      total_time += frame_time;
-   else
-      total_time += ((frame_time + (time_reference >> 1)) / time_reference) * time_reference;
-   int frames = (total_time + (time_reference >> 1)) / time_reference;
-
-   if (frames <= 0)
-      video_cb(NULL, Game::fb_width, Game::fb_height, 0);
-   else
-   {
-      present_frame = false;
-      for (int i = 0; i < frames - 1; i++)
-         game->iterate();
-      present_frame = true;
-      game->iterate();
-      total_time -= time_reference * frames;
-   }
+   /* Standard libretro pacing: one tick and one audio block per call. The
+    * frontend drives retro_run at timing.fps, so the game advances at the
+    * rate the "Frame rate" option selects. Fast-forward just calls
+    * retro_run more often, which speeds the audio up too - the old async
+    * audio callback pulled samples at the device rate regardless of
+    * emulation speed, so fast-forward never sped up sound. */
+   game->iterate();
 
    get_bg().step(mixer);
-
-   /* Frame-paced audio: emit one 1/60 s block per emulated frame, so the
-    * audio advances at the same rate as emulation. Fast-forward calls
-    * retro_run more often (and/or advances more frames), which now speeds
-    * the audio up too, matching how ordinary cores behave. With the old
-    * async audio callback the frontend pulled audio at the device rate
-    * regardless of emulation speed, so fast-forward never sped up sound. */
-   {
-      int i;
-      for (i = 0; i < frames; i++)
-         audio_callback();
-   }
+   audio_callback();
 
    if (game->done())
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
@@ -275,8 +301,7 @@ static void load_game(const string& path)
 
    game = Blit::Utils::make_unique<GameManager>(path, input_cb,
          [&](const void* data, unsigned width, unsigned height, size_t pitch) {
-            if (present_frame)
-               video_cb(data, width, height, pitch);
+            video_cb(data, width, height, pitch);
          }
    );
 }
@@ -395,11 +420,6 @@ bool retro_load_game(const struct retro_game_info* info)
    };
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
-
-   time_reference = 1000000 / 60;
-   present_frame = false;
-   struct retro_frame_time_callback frame_cb = { frame_time_cb, time_reference };
-   use_frame_time_cb = environ_cb(RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, &frame_cb);
 
    load_game(game_path);
 
