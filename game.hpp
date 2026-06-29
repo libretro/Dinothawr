@@ -40,7 +40,12 @@ namespace Icy
    {
 #ifndef USE_CXX03
       public:
+         SFXManager() = default;
          ~SFXManager();
+         /* Owns raw-pointer int16 buffers (released in the destructor), so
+          * copying would double-unref. It is a singleton; forbid copies. */
+         SFXManager(const SFXManager&) = delete;
+         SFXManager& operator=(const SFXManager&) = delete;
          void add_stream(const std::string &ident, const std::string &path);
          void play_sfx(const std::string &ident, float volume = 1.0f) const;
 
