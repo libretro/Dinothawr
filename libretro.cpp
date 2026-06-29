@@ -42,7 +42,6 @@ extern "C" {
 static SFXManager sfx;
 static BGManager bg_music;
 
-static bool use_audio_cb;
 static bool use_frame_time_cb;
 static bool option_use_frame_time;
 
@@ -184,12 +183,6 @@ static void audio_callback(void)
    }
 }
 
-static void audio_set_state(bool enable)
-{
-   mixer.enable(enable);
-   mixer_i16_set_enabled(mixer_i16, enable); /* NULL-safe */
-}
-
 static void frame_time_cb(retro_usec_t usec)
 {
    frame_time = usec;
@@ -245,8 +238,17 @@ void retro_run(void)
 
    get_bg().step(mixer);
 
-   if (!use_audio_cb)
-      audio_callback();
+   /* Frame-paced audio: emit one 1/60 s block per emulated frame, so the
+    * audio advances at the same rate as emulation. Fast-forward calls
+    * retro_run more often (and/or advances more frames), which now speeds
+    * the audio up too, matching how ordinary cores behave. With the old
+    * async audio callback the frontend pulled audio at the device rate
+    * regardless of emulation speed, so fast-forward never sped up sound. */
+   {
+      int i;
+      for (i = 0; i < frames; i++)
+         audio_callback();
+   }
 
    if (game->done())
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
@@ -350,9 +352,6 @@ bool retro_load_game(const struct retro_game_info* info)
       }
    }
 
-   struct retro_audio_callback cb = { audio_callback, audio_set_state };
-   use_audio_cb = environ_cb(RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK, &cb);
-
    /* Negotiate float audio output. If the frontend supports it, the
     * mixer's float output is delivered directly; otherwise we run the
     * deterministic int16 pipeline (int16 mixer + int16 SFX/BG decode). */
@@ -405,6 +404,11 @@ bool retro_load_game(const struct retro_game_info* info)
    load_game(game_path);
 
    mixer = Audio::Mixer();
+   /* Audio is now produced synchronously from retro_run (no async audio
+    * callback), so the mixers are simply always enabled while a game is
+    * loaded - the audio_set_state enable/disable handshake is gone. */
+   mixer.enable(true);
+   mixer_i16_set_enabled(mixer_i16, true); /* NULL-safe in float mode */
 
    retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
    environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
