@@ -91,14 +91,39 @@ int16_t *wav_i16_load(const char *path, size_t *out_samples);
 mixer_i16_t *mixer_i16_new(void);
 void mixer_i16_free(mixer_i16_t *mixer);
 
-/* Append a stream; the mixer takes ownership and will destroy() it. */
+/* Append a fire-and-forget stream (e.g. a sound effect); the mixer takes
+ * ownership and destroy()s it once it goes invalid. */
 void mixer_i16_add(mixer_i16_t *mixer, i16_stream_t *stream);
 
-/* Destroy all streams. */
+/* Dedicated music slot. set_music() replaces (and destroy()s) any current
+ * music stream and takes ownership of the new one (NULL just clears it).
+ * music_active() reports whether a music stream is present and still
+ * playing. Keeping music in its own slot lets the caller drive a playlist
+ * ("load the next track once music_active() is false") without holding a
+ * pointer into the mixer. */
+void mixer_i16_set_music(mixer_i16_t *mixer, i16_stream_t *stream);
+int  mixer_i16_music_active(const mixer_i16_t *mixer);
+
+/* Destroy all streams (SFX and music). */
 void mixer_i16_clear(mixer_i16_t *mixer);
 
 /* Master gain, Q15. Defaults to unity. */
 void mixer_i16_set_master_q15(mixer_i16_t *mixer, int32_t q15);
+
+/* Enable flag, mirroring the float mixer: SFX are only queued while
+ * enabled. Defaults to disabled until the audio callback turns it on. */
+void mixer_i16_set_enabled(mixer_i16_t *mixer, int enabled);
+int  mixer_i16_enabled(const mixer_i16_t *mixer);
+
+/* Optional serialisation hooks. When the libretro audio callback runs on
+ * its own thread, the main thread may add SFX / swap the music track
+ * while the audio thread is rendering. Set these (e.g. backed by a mutex)
+ * so the mixer guards stream mutation and render against each other, the
+ * same way the float mixer does internally. NULL hooks mean no locking
+ * (single-threaded use). */
+typedef void (*i16_lock_fn)(void *data);
+void mixer_i16_set_lock(mixer_i16_t *mixer, i16_lock_fn lock,
+      i16_lock_fn unlock, void *data);
 
 /* Render 'frames' interleaved stereo int16 frames into 'out'. Dead
  * streams are purged first; remaining streams are summed with their
