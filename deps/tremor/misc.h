@@ -41,21 +41,33 @@
 #include <sys/types.h>
 #endif
 
-#if BYTE_ORDER==LITTLE_ENDIAN
+/* Select exactly one layout for splitting the 64-bit product into halves.
+ *
+ * Relying on the bare BYTE_ORDER/LITTLE_ENDIAN/BIG_ENDIAN macros is fragile:
+ * when the platform headers leave them undefined (Android/bionic only
+ * exposes them behind __BSD_VISIBLE, which flips between NDK versions) the
+ * preprocessor treats the identifiers as 0, so BOTH BYTE_ORDER==LITTLE_ENDIAN
+ * and BYTE_ORDER==BIG_ENDIAN evaluate true and union magic is defined twice.
+ *
+ * Prefer the compiler's own __BYTE_ORDER__ (always defined by GCC/Clang),
+ * fall back to the legacy macros only when they are genuinely defined, and
+ * default to little endian otherwise (covers x86, ARM, Android and MSVC). */
+#if (defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) || \
+    (!defined(__BYTE_ORDER__) && defined(BYTE_ORDER) && defined(BIG_ENDIAN) && \
+     BYTE_ORDER == BIG_ENDIAN)
 union magic {
   struct {
-    ogg_int32_t lo;
     ogg_int32_t hi;
+    ogg_int32_t lo;
   } halves;
   ogg_int64_t whole;
 };
-#endif 
-
-#if BYTE_ORDER==BIG_ENDIAN
+#else
 union magic {
   struct {
-    ogg_int32_t hi;
     ogg_int32_t lo;
+    ogg_int32_t hi;
   } halves;
   ogg_int64_t whole;
 };
