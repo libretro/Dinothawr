@@ -48,7 +48,7 @@ struct retro_core_option_definition option_defs_us[] = {
          { "240",  NULL },
          { NULL, NULL },
       },
-      "60",
+      "Auto",
    },
    { NULL, NULL, NULL, { NULL, NULL }, NULL },
 };
