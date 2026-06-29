@@ -141,7 +141,7 @@ namespace Icy
 
       Chapter loaded_chap = Chapter(move(levels), chap.attribute("name").value());
       loaded_chap.set_minimum_clear(chap.attribute("minimum_clear").as_int());
-      return move(loaded_chap);
+      return loaded_chap;
    }
 
    void GameManager::init_menu(const string& level)

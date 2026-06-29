@@ -172,7 +172,7 @@ namespace Audio
 
          return pcm_data;
       }
-      catch (const ifstream::failure e)
+      catch (const ifstream::failure& e)
       {
          cerr << "iostream error: " << e.what() << endl;
          throw runtime_error("Failed to open wave.");
@@ -339,7 +339,7 @@ namespace Audio
             std::vector<float> f = finished.front();
             std::shared_ptr<std::vector<float> > ret = make_shared<vector<float>>(move(f));
             finished.pop();
-            return move(ret);
+            return ret;
          }
          else
             return {};
