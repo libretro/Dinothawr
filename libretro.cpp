@@ -32,6 +32,11 @@ retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
 static retro_audio_sample_t audio_cb;
 static retro_audio_sample_batch_t audio_batch_cb;
+/* Set if the frontend supports float audio output (negotiated via
+ * RETRO_ENVIRONMENT_GET_AUDIO_SAMPLE_BATCH_FLOAT). Dinothawr's mixer is
+ * float-native, so when this is available we hand samples over as float
+ * and skip the float->int16 squash entirely. */
+static retro_audio_sample_batch_float_t audio_batch_float_cb;
 static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
@@ -51,6 +56,7 @@ namespace Icy
 
 #define AUDIO_FRAMES (44100 / 60)
 static int16_t audio_buffer[2 * AUDIO_FRAMES];
+static float   audio_buffer_f[2 * AUDIO_FRAMES];
 
 static void check_system_specs(void)
 {
@@ -137,6 +143,19 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 
 static void audio_callback(void)
 {
+   /* Float-native path: the mixer renders float, so when the frontend
+    * accepts float we push it straight through - no float->int16 step. */
+   if (audio_batch_float_cb)
+   {
+      mixer.render(audio_buffer_f, AUDIO_FRAMES);
+      for (unsigned i = 0; i < AUDIO_FRAMES; )
+      {
+         unsigned written = audio_batch_float_cb(audio_buffer_f + 2 * i, AUDIO_FRAMES - i);
+         i += written;
+      }
+      return;
+   }
+
    mixer.render(audio_buffer, AUDIO_FRAMES);
    for (unsigned i = 0; i < AUDIO_FRAMES; )
    {
@@ -312,6 +331,19 @@ bool retro_load_game(const struct retro_game_info* info)
 
    struct retro_audio_callback cb = { audio_callback, audio_set_state };
    use_audio_cb = environ_cb(RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK, &cb);
+
+   /* Negotiate float audio output. If the frontend supports it, the
+    * mixer's float output is delivered directly; otherwise we keep the
+    * int16 path via audio_batch_cb. */
+   {
+      struct retro_audio_sample_float_callback float_cb;
+      float_cb.batch = NULL;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_SAMPLE_BATCH_FLOAT, &float_cb)
+            && float_cb.batch)
+         audio_batch_float_cb = float_cb.batch;
+      else
+         audio_batch_float_cb = NULL;
+   }
 
    struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
