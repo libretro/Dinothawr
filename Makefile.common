@@ -50,6 +50,7 @@ SOURCES_C := \
 	$(DEPS_DIR)/libz/zutil.c
 
 SOURCES_C += $(CORE_DIR)/rpng_front.c
+SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 
 ifeq ($(STATIC_LINKING), 1)
 else
