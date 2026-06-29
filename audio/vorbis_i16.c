@@ -1,29 +1,21 @@
 /* Dinothawr - Ogg Vorbis -> interleaved stereo int16 decode (impl).
- * MSVC C89. See vorbis_i16.h. */
+ * MSVC C89. See vorbis_i16.h.
+ *
+ * Decode is integer-only via Tremor's ov_read(): no float appears
+ * anywhere on this path, so the produced PCM is bit-deterministic across
+ * platforms. */
 
 #include "vorbis_i16.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
-#include <vorbis/vorbisfile.h>
+#include <tremor/ivorbisfile.h>
 
 #include <retro_inline.h>
 
-/* Decode block size, in frames, requested from ov_read_float per call. */
-#define VORBIS_I16_CHUNK_FRAMES 4096
-
-/* Saturating float [-1,1] -> int16, matching convert_float_to_s16
- * (scale by 32768, clamp). */
-static INLINE int16_t vorbis_i16_clip(float f)
-{
-   int s = (int)(f * 32768.0f);
-
-   if (s > 32767)
-      s = 32767;
-   else if (s < -32768)
-      s = -32768;
-   return (int16_t)s;
-}
+/* Decode scratch, in int16 samples (8 KiB). */
+#define VORBIS_I16_CHUNK_SAMPLES 4096
 
 /* Grow 'buf' (int16 capacity 'cap') so it can hold at least 'need'
  * int16 samples. Returns the (possibly moved) buffer, or NULL on OOM
@@ -54,17 +46,28 @@ static int16_t *vorbis_i16_reserve(int16_t *buf, size_t *cap, size_t need)
 
 i16_buf_t *vorbis_i16_decode_file(const char *path)
 {
+   FILE           *fp;
    OggVorbis_File  vf;
    vorbis_info    *info;
    i16_buf_t      *buf;
    int16_t        *out     = NULL;
    size_t          out_len = 0; /* int16 samples written    */
    size_t          out_cap = 0; /* int16 samples allocated  */
+   int             channels;
    int             is_mono;
    int             bitstream;
+   int16_t         chunk[VORBIS_I16_CHUNK_SAMPLES];
 
-   if (ov_fopen(path, &vf) < 0)
+   fp = fopen(path, "rb");
+   if (!fp)
       return NULL;
+
+   /* ov_open takes ownership of fp; ov_clear() fcloses it. */
+   if (ov_open(fp, &vf, NULL, 0) < 0)
+   {
+      fclose(fp);
+      return NULL;
+   }
 
    info = ov_info(&vf, -1);
    if (    !info
@@ -75,20 +78,23 @@ i16_buf_t *vorbis_i16_decode_file(const char *path)
       ov_clear(&vf);
       return NULL;
    }
-   is_mono = (info->channels == 1);
+   channels = info->channels;
+   is_mono  = (channels == 1);
 
    for (;;)
    {
-      float **pcm;
-      long    ret = ov_read_float(&vf, &pcm, VORBIS_I16_CHUNK_FRAMES,
+      long   bytes = ov_read(&vf, (char*)chunk, (int)sizeof(chunk),
             &bitstream);
-      long    i;
-      size_t  need;
+      long   frames_in;
+      long   i;
+      size_t need;
 
-      if (ret <= 0) /* 0 == EOF, < 0 == decode error: stop either way */
+      if (bytes <= 0) /* 0 == EOF, < 0 == decode error: stop either way */
          break;
 
-      need = out_len + (size_t)ret * MIXER_I16_CHANNELS;
+      frames_in = (bytes / 2) / channels; /* int16 samples / channels */
+
+      need = out_len + (size_t)frames_in * MIXER_I16_CHANNELS;
       out  = vorbis_i16_reserve(out, &out_cap, need);
       if (!out)
       {
@@ -98,20 +104,18 @@ i16_buf_t *vorbis_i16_decode_file(const char *path)
 
       if (is_mono)
       {
-         for (i = 0; i < ret; i++)
+         for (i = 0; i < frames_in; i++)
          {
-            int16_t s = vorbis_i16_clip(pcm[0][i]);
+            int16_t s = chunk[i];
             out[out_len++] = s;
             out[out_len++] = s;
          }
       }
       else
       {
-         for (i = 0; i < ret; i++)
-         {
-            out[out_len++] = vorbis_i16_clip(pcm[0][i]);
-            out[out_len++] = vorbis_i16_clip(pcm[1][i]);
-         }
+         long n = frames_in * MIXER_I16_CHANNELS;
+         for (i = 0; i < n; i++)
+            out[out_len++] = chunk[i];
       }
    }
 

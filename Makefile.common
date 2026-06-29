@@ -1,6 +1,6 @@
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
 DEPS_DIR          := $(CORE_DIR)/deps
-INCFLAGS := -I$(DEPS_DIR) -I$(CORE_DIR)/audio -I$(DEPS_DIR)/pugixml -I$(DEPS_DIR)/vorbis -I$(DEPS_DIR)/ogg -I$(DEPS_DIR)/libz -I$(LIBRETRO_COMM_DIR)/include
+INCFLAGS := -I$(DEPS_DIR) -I$(CORE_DIR)/audio -I$(DEPS_DIR)/pugixml -I$(DEPS_DIR)/tremor -I$(DEPS_DIR)/ogg -I$(DEPS_DIR)/libz -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 
@@ -21,25 +21,19 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 SOURCES_C := \
 	$(DEPS_DIR)/ogg/bitwise.c \
 	$(DEPS_DIR)/ogg/framing.c \
-	$(DEPS_DIR)/vorbis/bitrate.c \
-	$(DEPS_DIR)/vorbis/block.c \
-	$(DEPS_DIR)/vorbis/codebook.c \
-	$(DEPS_DIR)/vorbis/envelope.c \
-	$(DEPS_DIR)/vorbis/floor0.c \
-	$(DEPS_DIR)/vorbis/floor1.c \
-	$(DEPS_DIR)/vorbis/info.c \
-	$(DEPS_DIR)/vorbis/lpc.c \
-	$(DEPS_DIR)/vorbis/lsp.c \
-	$(DEPS_DIR)/vorbis/mapping0.c \
-	$(DEPS_DIR)/vorbis/mdct.c \
-	$(DEPS_DIR)/vorbis/psy.c \
-	$(DEPS_DIR)/vorbis/registry.c \
-	$(DEPS_DIR)/vorbis/res0.c \
-	$(DEPS_DIR)/vorbis/sharedbook.c \
-	$(DEPS_DIR)/vorbis/smallft.c \
-	$(DEPS_DIR)/vorbis/synthesis.c \
-	$(DEPS_DIR)/vorbis/vorbisfile.c \
-	$(DEPS_DIR)/vorbis/window.c \
+	$(DEPS_DIR)/tremor/block.c \
+	$(DEPS_DIR)/tremor/codebook.c \
+	$(DEPS_DIR)/tremor/floor0.c \
+	$(DEPS_DIR)/tremor/floor1.c \
+	$(DEPS_DIR)/tremor/info.c \
+	$(DEPS_DIR)/tremor/mapping0.c \
+	$(DEPS_DIR)/tremor/mdct.c \
+	$(DEPS_DIR)/tremor/registry.c \
+	$(DEPS_DIR)/tremor/res012.c \
+	$(DEPS_DIR)/tremor/sharedbook.c \
+	$(DEPS_DIR)/tremor/synthesis.c \
+	$(DEPS_DIR)/tremor/vorbisfile.c \
+	$(DEPS_DIR)/tremor/window.c \
 	$(DEPS_DIR)/libz/adler32.c \
 	$(DEPS_DIR)/libz/crc32.c \
 	$(DEPS_DIR)/libz/deflate.c \

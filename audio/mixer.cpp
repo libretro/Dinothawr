@@ -198,26 +198,30 @@ namespace Audio
       : path(path), is_eof(false), is_mono(false)
    {
       vorbis_info *info = NULL;
+      FILE        *file = fopen(path.c_str(), "rb");
 
-      if (ov_fopen(path.c_str(), &vf) < 0)
+      if (!file)
          throw runtime_error(join("Failed to open vorbis file: ", path));
 
-      cerr << "Vorbis info:" << endl;
-      cerr << "\tStreams: " << ov_streams(&vf) << endl;
+      /* Tremor's ov_open takes ownership of the FILE*; ov_clear() closes
+       * it. On failure we still own it and must close it ourselves. */
+      if (ov_open(file, &vf, NULL, 0) < 0)
+      {
+         fclose(file);
+         throw runtime_error(join("Failed to open vorbis file: ", path));
+      }
 
-      info = (vorbis_info*)ov_info(&vf, 0);
+      info = (vorbis_info*)ov_info(&vf, -1);
 
       if (info)
       {
          switch (info->channels)
          {
             case 1:
-               cerr << "Mono!" << endl;
                is_mono = true;
                break;
 
             case 2:
-               cerr << "Stereo!" << endl;
                is_mono = false;
                break;
 
@@ -239,7 +243,8 @@ namespace Audio
 
    void VorbisFile::rewind()
    {
-      if (ov_time_seek(&vf, 0.0) != 0)
+      /* Tremor's ov_time_seek position is in milliseconds. */
+      if (ov_time_seek(&vf, 0) != 0)
          throw runtime_error("Couldn't rewind vorbis audio!\n");
 
       is_eof = false;
@@ -251,9 +256,14 @@ namespace Audio
 
       while (frames)
       {
-         float **pcm;
-         int bitstream;
-         long ret = ov_read_float(&vf, &pcm, frames, &bitstream);
+         int     bitstream;
+         /* Tremor decodes interleaved int16 (host-endian). Scratch holds
+          * up to 4096 stereo frames; mono yields half as many int16. */
+         int16_t pcm[4096 * Mixer::channels];
+         size_t  want_frames = (frames < 4096) ? frames : 4096;
+         int     want_bytes  = (int)(want_frames
+               * (is_mono ? 1 : Mixer::channels) * sizeof(int16_t));
+         long    ret = ov_read(&vf, (char*)pcm, want_bytes, &bitstream);
 
          if (ret < 0)
             throw runtime_error(join("Vorbis decoding failed with: ", ret));
@@ -265,7 +275,7 @@ namespace Audio
                loop(false); // Avoid infinite recursion incause our audio clip is really short.
                ScopeExit holder([this] { loop(true); });
 
-               if (ov_time_seek(&vf, 0.0) == 0)
+               if (ov_time_seek(&vf, 0) == 0)
                {
                   long unsigned int ret = render(buffer, frames);
                   return rendered + ret;
@@ -279,28 +289,32 @@ namespace Audio
             return rendered;
          }
 
-         if (!is_mono)
          {
+            long in_frames = (ret / 2) / (is_mono ? 1 : Mixer::channels);
             long i;
-            unsigned c;
 
-            for (c = 0; c < Mixer::channels; c++)
-               for (i = 0; i < ret; i++)
-                  buffer[2 * i + c] = pcm[c][i];
+            if (!is_mono)
+            {
+               for (i = 0; i < in_frames; i++)
+               {
+                  buffer[2 * i + 0] = pcm[2 * i + 0] / 32768.0f;
+                  buffer[2 * i + 1] = pcm[2 * i + 1] / 32768.0f;
+               }
+            }
+            else
+            {
+               for (i = 0; i < in_frames; i++)
+               {
+                  float v = pcm[i] / 32768.0f;
+                  buffer[2 * i + 0] = v;
+                  buffer[2 * i + 1] = v;
+               }
+            }
+
+            buffer   += in_frames * Mixer::channels;
+            frames   -= in_frames;
+            rendered += in_frames;
          }
-         else
-         {
-            long i;
-            unsigned c;
-
-            for (c = 0; c < Mixer::channels; c++)
-               for (i = 0; i < ret; i++)
-                  buffer[2 * i + c] = pcm[0][i];
-         }
-
-         buffer   += ret * Mixer::channels;
-         frames   -= ret;
-         rendered += ret;
       }
 
       return rendered;

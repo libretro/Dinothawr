@@ -13,7 +13,7 @@
 #include <chrono>
 #include <queue>
 #include <mutex>
-#include <vorbis/vorbisfile.h>
+#include <tremor/ivorbisfile.h>
 #endif
 
 #ifndef M_PI
