@@ -77,6 +77,10 @@ namespace Icy
          bool first;
          unsigned last;
 
+         /* int16 path: the next track is decoded off-thread, mirroring the
+          * float loader, so a track change does not stall the game. */
+         std::future<i16_buf_t*> i16_future;
+
          unsigned next_index();
 #else
       public:

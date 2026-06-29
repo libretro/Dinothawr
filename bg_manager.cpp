@@ -2,6 +2,9 @@
 #ifndef USE_CXX03
 #include <stdlib.h>
 
+#include <future>
+#include <chrono>
+
 #include "audio/mixer_i16.h"
 #include "audio/vorbis_i16.h"
 
@@ -16,10 +19,19 @@ namespace Icy
       first = true;
       last = 0;
 
-      /* Drop any music left over from a previous game on the int16 path
-       * (the float path resets via its own mixer reassignment). */
+      /* Reset the int16 path: drain any decode still in flight from a
+       * previous game (discarding its buffer) and clear the music slot.
+       * The float path resets via its own mixer reassignment. */
       if (!audio_is_float())
+      {
+         if (i16_future.valid())
+         {
+            i16_buf_t *buf = i16_future.get();
+            if (buf)
+               i16_buf_unref(buf);
+         }
          mixer_i16_set_music(get_mixer_i16(), NULL);
+      }
    }
 
    /* Choose the next track index: the first track initially, then a
@@ -46,11 +58,10 @@ namespace Icy
    {
       if (!audio_is_float())
       {
-         /* int16 pipeline: drive the mixer's music slot. A track is
-          * decoded to int16 and handed over; when it finishes the slot
-          * empties and we load the next. Decode is synchronous here
-          * (a brief track-change cost on the fallback path); moving it
-          * off-thread to match the float loader is a later refinement. */
+         /* int16 pipeline: drive the mixer's music slot, decoding the next
+          * track off-thread (like the float loader) so a track change does
+          * not stall the game. While the slot is empty we keep exactly one
+          * decode in flight and install it once ready. */
          mixer_i16_t *m = get_mixer_i16();
 
          if (mixer_i16_music_active(m))
@@ -58,14 +69,22 @@ namespace Icy
          if (!tracks.size())
             return;
 
+         if (!i16_future.valid())
          {
-            unsigned   index = next_index();
-            i16_buf_t *buf   = vorbis_i16_decode_file(tracks[index].path.c_str());
+            std::string path = tracks[next_index()].path;
+            i16_future = std::async(std::launch::async,
+                  [path] { return vorbis_i16_decode_file(path.c_str()); });
+         }
+
+         if (i16_future.wait_for(std::chrono::seconds(0))
+               == std::future_status::ready)
+         {
+            i16_buf_t *buf = i16_future.get(); /* clears the future */
 
             if (buf)
             {
                i16_stream_t *stream = i16_pcm_stream_new(buf, 0,
-                     mixer_i16_q15_from_float(tracks[index].gain));
+                     mixer_i16_q15_from_float(tracks[last].gain));
                i16_buf_unref(buf); /* stream holds its own reference */
                mixer_i16_set_music(m, stream);
             }
