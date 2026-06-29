@@ -51,6 +51,7 @@ SOURCES_C := \
 
 SOURCES_C += $(CORE_DIR)/rpng_front.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
+SOURCES_C += $(CORE_DIR)/audio/vorbis_i16.c
 
 ifeq ($(STATIC_LINKING), 1)
 else
