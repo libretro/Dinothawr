@@ -10,7 +10,7 @@ endif
 
 include $(CORE_DIR)/Makefile.common
 
-COREFLAGS := -DWANT_ZLIB -DHAVE_ZLIB -DHAVE_RPNG -Wall -DOV_EXCLUDE_STATIC_CALLBACKS -ffast-math -D_GLIBCXX_HAS_GTHREADS -DANDROID $(INCFLAGS)
+COREFLAGS := -DHAVE_RPNG -Wall -DOV_EXCLUDE_STATIC_CALLBACKS -ffast-math -D_GLIBCXX_HAS_GTHREADS -DANDROID $(INCFLAGS)
 
 GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
 ifneq ($(GIT_VERSION)," unknown")
@@ -23,7 +23,7 @@ LOCAL_SRC_FILES    := $(SOURCES_CXX) $(SOURCES_C) $(SOURCES_ASM)
 LOCAL_CPPFLAGS     := -std=gnu++11 $(COREFLAGS)
 LOCAL_CFLAGS       := $(COREFLAGS)
 LOCAL_LDFLAGS      := -Wl,-version-script=$(CORE_DIR)/link.T
-LOCAL_LDLIBS       := -lz -latomic
+LOCAL_LDLIBS       := -latomic
 LOCAL_CPP_FEATURES := exceptions
 
 ifeq ($(HAVE_NEON),1)

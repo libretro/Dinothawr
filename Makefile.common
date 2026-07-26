@@ -1,6 +1,6 @@
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
 DEPS_DIR          := $(CORE_DIR)/deps
-INCFLAGS := -I$(DEPS_DIR) -I$(CORE_DIR)/audio -I$(DEPS_DIR)/pugixml -I$(DEPS_DIR)/tremor -I$(DEPS_DIR)/ogg -I$(DEPS_DIR)/libz -I$(LIBRETRO_COMM_DIR)/include
+INCFLAGS := -I$(DEPS_DIR) -I$(CORE_DIR)/audio -I$(DEPS_DIR)/pugixml -I$(DEPS_DIR)/tremor -I$(DEPS_DIR)/ogg -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 
@@ -33,15 +33,7 @@ SOURCES_C := \
 	$(DEPS_DIR)/tremor/sharedbook.c \
 	$(DEPS_DIR)/tremor/synthesis.c \
 	$(DEPS_DIR)/tremor/vorbisfile.c \
-	$(DEPS_DIR)/tremor/window.c \
-	$(DEPS_DIR)/libz/adler32.c \
-	$(DEPS_DIR)/libz/crc32.c \
-	$(DEPS_DIR)/libz/deflate.c \
-	$(DEPS_DIR)/libz/inffast.c \
-	$(DEPS_DIR)/libz/inflate.c \
-	$(DEPS_DIR)/libz/inftrees.c \
-	$(DEPS_DIR)/libz/trees.c \
-	$(DEPS_DIR)/libz/zutil.c
+	$(DEPS_DIR)/tremor/window.c
 
 SOURCES_C += $(CORE_DIR)/rpng_front.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
@@ -69,7 +61,6 @@ SOURCES_C += \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_deflate.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_pipe.c \
-				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_zlib.c \
 				 $(LIBRETRO_COMM_DIR)/string/stdstring.c \
 				 $(LIBRETRO_COMM_DIR)/time/rtime.c \
 				 $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
