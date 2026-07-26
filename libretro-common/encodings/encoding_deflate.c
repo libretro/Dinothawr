@@ -153,10 +153,42 @@ static uint32_t rinf_adler32_update(uint32_t adler,
    {
       /* process in chunks so the sums never overflow before the modulo */
       size_t n = len > 5552 ? 5552 : len;
+      size_t k = n;
       len -= n;
-      do {
-         a += *buf++; b += a;
-      } while (--n);
+   {
+      /* Thirty-two bytes at a time.  The textbook loop carries a
+       * serial dependency - b += a after every byte - that no
+       * compiler can vectorise.  Over a group of N the same result is
+       *    a' = a + SUM(buf[j])
+       *    b' = b + N*a + SUM((N-j)*buf[j])
+       * two independent reductions with constant weights.  N is 32
+       * rather than 16 because that is what GCC's vectoriser
+       * actually takes: at 16 it declines and unrolls scalar, at 32
+       * it emits punpck/paddd (and the NEON equivalent on ARM).
+       * Verified in the object file, not assumed - and correct
+       * either way, since a compiler that declines still computes
+       * the same sums.  The chunk bound is untouched, so the
+       * overflow argument is unchanged with it. */
+      while (k >= 32)
+      {
+         uint32_t sum = 0, wsum = 0;
+         unsigned j;
+         for (j = 0; j < 32; j++)
+         {
+            sum  += buf[j];
+            wsum += (uint32_t)(32 - j) * buf[j];
+         }
+         b   += 32 * a + wsum;
+         a   += sum;
+         buf += 32;
+         k   -= 32;
+      }
+      while (k--)
+      {
+         a += *buf++;
+         b += a;
+      }
+   }
       a %= ADLER_MOD;
       b %= ADLER_MOD;
    }
@@ -493,6 +525,31 @@ int rinflate_process(void *data, size_t *read, size_t *wrote)
                if (!rinf_emit(s, s->pending_lit)) goto suspend;
                s->have_pending_lit = 0;
                s->stored_len--;
+            }
+            /* Bulk copy: a stored block is byte-aligned by
+             * construction, and the LEN/NLEN read that precedes this
+             * phase consumes whole bytes from an aligned start, so
+             * the bit buffer is empty on arrival and the payload can
+             * go straight from input to output.  The bitcnt test is
+             * an invariant check rather than a live branch - if a
+             * future change leaves bits buffered, the byte-at-a-time
+             * loop below still produces correct output, just slowly. */
+            if (s->stored_len > 0 && s->bitcnt == 0)
+            {
+               size_t avail_in  = s->in_size  - s->in_pos;
+               size_t avail_out = s->out_size - s->out_pos;
+               size_t n         = s->stored_len;
+               if (n > avail_in)  n = avail_in;
+               if (n > avail_out) n = avail_out;
+               if (n)
+               {
+                  memcpy(s->out + s->out_pos, s->in + s->in_pos, n);
+                  s->in_pos     += n;
+                  s->out_pos    += n;
+                  s->stored_len -= (uint32_t)n;
+               }
+               if (s->stored_len > 0)
+                  goto suspend;   /* input or output exhausted */
             }
             while (s->stored_len > 0)
             {
@@ -1009,8 +1066,42 @@ static uint32_t rd_adler32(uint32_t adler, const uint8_t *buf, size_t len)
    while (len)
    {
       size_t n = len > 5552 ? 5552 : len;
+      size_t k = n;
       len -= n;
-      do { a += *buf++; b += a; } while (--n);
+   {
+      /* Thirty-two bytes at a time.  The textbook loop carries a
+       * serial dependency - b += a after every byte - that no
+       * compiler can vectorise.  Over a group of N the same result is
+       *    a' = a + SUM(buf[j])
+       *    b' = b + N*a + SUM((N-j)*buf[j])
+       * two independent reductions with constant weights.  N is 32
+       * rather than 16 because that is what GCC's vectoriser
+       * actually takes: at 16 it declines and unrolls scalar, at 32
+       * it emits punpck/paddd (and the NEON equivalent on ARM).
+       * Verified in the object file, not assumed - and correct
+       * either way, since a compiler that declines still computes
+       * the same sums.  The chunk bound is untouched, so the
+       * overflow argument is unchanged with it. */
+      while (k >= 32)
+      {
+         uint32_t sum = 0, wsum = 0;
+         unsigned j;
+         for (j = 0; j < 32; j++)
+         {
+            sum  += buf[j];
+            wsum += (uint32_t)(32 - j) * buf[j];
+         }
+         b   += 32 * a + wsum;
+         a   += sum;
+         buf += 32;
+         k   -= 32;
+      }
+      while (k--)
+      {
+         a += *buf++;
+         b += a;
+      }
+   }
       a %= RD_ADLER_MOD;
       b %= RD_ADLER_MOD;
    }
