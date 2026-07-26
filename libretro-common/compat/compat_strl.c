@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2017 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (compat_strl.c).
@@ -20,45 +20,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <stdlib.h>
 #include <ctype.h>
 
 #include <compat/strl.h>
-#include <compat/posix_string.h>
-
-#include <retro_assert.h>
 
 /* Implementation of strlcpy()/strlcat() based on OpenBSD. */
 
-#ifndef __MACH__
-
-size_t strlcpy(char *dest, const char *source, size_t size)
+#if !(defined(__MACH__) && defined(__APPLE__))
+size_t strlcpy(char *s, const char *in, size_t len)
 {
-   size_t src_size = 0;
-   size_t        n = size;
-
-   if (n)
-      while (--n && (*dest++ = *source++)) src_size++;
-
-   if (!n)
-   {
-      if (size) *dest = '\0';
-      while (*source++) src_size++;
-   }
-
-   return src_size;
+    size_t _len = strlen(in);
+    if (len)
+    {
+        size_t __len = _len < len - 1 ? _len : len - 1;
+        memcpy(s, in, __len);
+        s[__len] = '\0';
+    }
+    return _len;
 }
 
-size_t strlcat(char *dest, const char *source, size_t size)
+size_t strlcat(char *s, const char *source, size_t len)
 {
-   size_t len = strlen(dest);
-
-   dest += len;
-
-   if (len > size)
-      size = 0;
+   size_t _len = strlen(s);
+   s += _len;
+   if (_len > len)
+      len = 0;
    else
-      size -= len;
-
-   return len + strlcpy(dest, source, size);
+      len -= _len;
+   return _len + strlcpy(s, source, len);
 }
 #endif

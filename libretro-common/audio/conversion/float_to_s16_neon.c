@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2017 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (float_to_s16_neon.S).
@@ -19,7 +19,7 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#if defined(__ARM_NEON__)
+#if defined(__ARM_NEON__) && defined(HAVE_ARM_NEON_ASM_OPTIMIZATIONS)
 
 #if defined(__thumb__)
 #define DECL_ARMMODE(x) "  .align 2\n" "  .global " x "\n" "  .thumb\n" "  .thumb_func\n" "  .type " x ", %function\n" x ":\n"
@@ -30,7 +30,7 @@
 asm(
     DECL_ARMMODE("convert_float_s16_asm")
     DECL_ARMMODE("_convert_float_s16_asm")
-    "# convert_float_s16_asm(int16_t *out, const float *in, size_t samples)\n"
+    "# convert_float_s16_asm(int16_t *s, const float *in, size_t len)\n"
     "   # Hacky way to get a constant of 2^15.\n"
     "   # ((2^4)^2)^2 * 0.5 = 2^15\n"
     "   vmov.f32 q8, #16.0\n"

@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2017 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (s16_to_float_neon.S).
@@ -19,7 +19,7 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#if defined(__ARM_NEON__)
+#if defined(__ARM_NEON__) && defined(HAVE_ARM_NEON_ASM_OPTIMIZATIONS)
 
 #ifndef __MACH__
 .arm
@@ -73,4 +73,12 @@ _convert_s16_float_asm:
 
    bx lr
 
+#endif
+
+/* Prevent the stack from becoming executable for no reason...
+ * Placed last: a bare .section switches the active section, and these
+ * files emit into the assembler default (.text) with no .text directive
+ * of their own to switch back. */
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
 #endif
