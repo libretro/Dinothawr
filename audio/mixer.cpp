@@ -7,6 +7,8 @@
 #include <fstream>
 
 #include <audio/audio_mix.h>
+#include <formats/audio.h>
+#include <formats/data_transfer.h>
 #include <audio/conversion/float_to_s16.h>
 
 using namespace Blit::Utils;
@@ -100,83 +102,105 @@ namespace Audio
       return to_write / Mixer::channels;
    }
 
+   /* Open a decoder over a whole file: data_transfer holds the encoded
+    * bytes (one budgeted fill, then a stable base pointer), audio_transfer
+    * borrows them.  Both WAV and Ogg Vorbis come through here - the facade
+    * is what makes them one code path rather than two loaders. */
+   static bool audio_open(const string& path, data_transfer_t **out_dt,
+         void **out_xfer, enum audio_type_enum *out_type,
+         unsigned *out_channels)
+   {
+      const uint8_t       *ptr  = NULL;
+      size_t               len  = 0;
+      data_transfer_t     *dt   = NULL;
+      void                *xfer = NULL;
+      unsigned             channels = 0;
+      unsigned             rate     = 0;
+      enum audio_type_enum type = audio_decode_get_type(path.c_str());
+
+      if (type == AUDIO_TYPE_NONE)
+         return false;
+
+      if (!(dt = data_transfer_open_prefix(path.c_str(), 0)))
+         return false;
+
+      data_transfer_iterate(dt, 0);
+      ptr = data_transfer_ptr(dt, &len);
+
+      if (!data_transfer_complete(dt) || !ptr || !len
+            || !(xfer = audio_transfer_new(type)))
+         goto error;
+
+      audio_transfer_set_buffer_ptr(xfer, type, (void*)ptr, len);
+
+      if (   !audio_transfer_start(xfer, type)
+          || !audio_transfer_info(xfer, type, &channels, &rate, NULL))
+         goto error;
+
+      if (channels < 1 || channels > 2 || rate != 44100)
+         goto error;
+
+      *out_dt       = dt;
+      *out_xfer     = xfer;
+      *out_type     = type;
+      *out_channels = channels;
+      return true;
+
+error:
+      if (xfer)
+         audio_transfer_free(xfer, type);
+      data_transfer_free(dt);
+      return false;
+   }
+
    vector<float> WAVFile::load_wave(const string& path)
    {
-      using namespace Blit::Utils;
-      ifstream file;
+      data_transfer_t     *dt   = NULL;
+      void                *xfer = NULL;
+      enum audio_type_enum type = AUDIO_TYPE_NONE;
+      unsigned             channels = 0;
+      vector<float>        pcm_data;
 
-      file.exceptions(ifstream::badbit | ifstream::failbit | ifstream::eofbit);
+      if (!audio_open(path, &dt, &xfer, &type, &channels))
+         throw runtime_error(join("Failed to open wave: ", path));
+
       try
       {
-         char header[44];
-         vector<int16_t> wave;
-         vector<float> pcm_data;
+         float  chunk[4096 * Mixer::channels];
+         size_t got = 0;
 
-         file.open(path, ifstream::in | ifstream::binary);
-         file.read(header, sizeof(header));
-
-         if (!equal(header + 0, header + 4, "RIFF"))
-            throw logic_error("Invalid WAV file.");
-
-         if (!equal(header + 8, header + 12, "WAVE"))
-            throw logic_error("Invalid WAV file.");
-
-         if (!equal(header + 12, header + 16, "fmt "))
-            throw logic_error("Invalid WAV file.");
-
-         if (read_le16(header + 20) != 1)
-            throw logic_error("WAV file not uncompressed.");
-
-         unsigned channels    = read_le16(header + 22);
-         unsigned sample_rate = read_le32(header + 24);
-         unsigned bits        = read_le16(header + 34);
-
-         if (channels < 1 || channels > 2)
-            throw logic_error("Invalid number of channels.");
-
-         if (sample_rate != 44100)
-            throw logic_error("Invalid sample rate.");
-
-         if (bits != 16)
-            throw logic_error("Invalid bit depth.");
-
-         unsigned wave_size = read_le32(header + 4);
-         wave_size += 8;
-         wave_size -= sizeof(header);
-         wave.resize(wave_size / sizeof(int16_t));
-
-         file.read(reinterpret_cast<char*>(wave.data()), wave_size);
-
-         if (channels == 1)
+         /* Read in caller-sized chunks rather than asking for the whole
+          * stream at once: the facade produces short reads freely, and a
+          * short read is not end of stream. */
+         while (audio_transfer_read_f32(xfer, type, chunk, 4096, &got)
+                     >= AUDIO_PROCESS_NEXT
+               && got)
          {
-            pcm_data.resize(2 * wave_size / sizeof(int16_t));
-            std::vector<float>::iterator ptr = pcm_data.begin();
-            for (auto val : wave)
-            {
-               float fval = static_cast<float>(val) / 0x8000;
-               *ptr++ = fval;
-               *ptr++ = fval;
-            }
+            size_t i;
 
-         }
-         else
-         {
-            pcm_data.resize(wave_size / sizeof(int16_t));
-            std::vector<float>::iterator ptr = pcm_data.begin();
-            for (auto val : wave)
+            if (channels == 1)
             {
-               float fval = static_cast<float>(val) / 0x8000;
-               *ptr++ = fval;
+               for (i = 0; i < got; i++)
+               {
+                  pcm_data.push_back(chunk[i]);
+                  pcm_data.push_back(chunk[i]);
+               }
             }
+            else
+               pcm_data.insert(pcm_data.end(), chunk,
+                     chunk + got * Mixer::channels);
          }
-
-         return pcm_data;
       }
-      catch (const ifstream::failure& e)
+      catch (...)
       {
-         cerr << "iostream error: " << e.what() << endl;
-         throw runtime_error("Failed to open wave.");
+         audio_transfer_free(xfer, type);
+         data_transfer_free(dt);
+         throw;
       }
+
+      audio_transfer_free(xfer, type);
+      data_transfer_free(dt);
+      return pcm_data;
    }
 
    vector<float> VorbisFile::decode()
@@ -195,56 +219,28 @@ namespace Audio
    }
 
    VorbisFile::VorbisFile(const string& path)
-      : path(path), is_eof(false), is_mono(false)
+      : path(path), dt(NULL), xfer(NULL), type(AUDIO_TYPE_NONE),
+        is_eof(false), is_mono(false)
    {
-      vorbis_info *info = NULL;
-      FILE        *file = fopen(path.c_str(), "rb");
+      unsigned channels = 0;
 
-      if (!file)
+      if (!audio_open(path, &dt, &xfer, &type, &channels))
          throw runtime_error(join("Failed to open vorbis file: ", path));
 
-      /* Tremor's ov_open takes ownership of the FILE*; ov_clear() closes
-       * it. On failure we still own it and must close it ourselves. */
-      if (ov_open(file, &vf, NULL, 0) < 0)
-      {
-         fclose(file);
-         throw runtime_error(join("Failed to open vorbis file: ", path));
-      }
-
-      info = (vorbis_info*)ov_info(&vf, -1);
-
-      if (info)
-      {
-         switch (info->channels)
-         {
-            case 1:
-               is_mono = true;
-               break;
-
-            case 2:
-               is_mono = false;
-               break;
-
-            default:
-               throw logic_error(join("Vorbis file has ", info->channels, " channels."));
-         }
-
-         if (info->rate != 44100)
-            throw logic_error(join("Sampling rate of file is: ", info->rate));
-      }
-      else
-         throw logic_error("Couldn't find info for vorbis file.");
+      is_mono = (channels == 1);
    }
 
    VorbisFile::~VorbisFile()
    {
-      ov_clear(&vf);
+      if (xfer)
+         audio_transfer_free(xfer, type);
+      if (dt)
+         data_transfer_free(dt);
    }
 
    void VorbisFile::rewind()
    {
-      /* Tremor's ov_time_seek position is in milliseconds. */
-      if (ov_time_seek(&vf, 0) != 0)
+      if (!audio_transfer_seek(xfer, type, 0))
          throw runtime_error("Couldn't rewind vorbis audio!\n");
 
       is_eof = false;
@@ -256,32 +252,30 @@ namespace Audio
 
       while (frames)
       {
-         int     bitstream;
-         /* Tremor decodes interleaved int16 (host-endian). Scratch holds
-          * up to 4096 stereo frames; mono yields half as many int16. */
-         int16_t pcm[4096 * Mixer::channels];
-         size_t  want_frames = (frames < 4096) ? frames : 4096;
-         int     want_bytes  = (int)(want_frames
-               * (is_mono ? 1 : Mixer::channels) * sizeof(int16_t));
-         long    ret = ov_read(&vf, (char*)pcm, want_bytes, &bitstream);
+         /* Vorbis is float internally, so read_f32 is the decoder's own
+          * output - no int16 round trip on the way through. */
+         float  pcm[4096 * Mixer::channels];
+         size_t want_frames = (frames < 4096) ? frames : 4096;
+         size_t got         = 0;
+         int    ret         = audio_transfer_read_f32(xfer, type, pcm,
+               want_frames, &got);
+         size_t i;
 
-         if (ret < 0)
+         if (ret < AUDIO_PROCESS_NEXT)
             throw runtime_error(join("Vorbis decoding failed with: ", ret));
 
-         if (ret == 0) // EOF
+         /* A short read is not end of stream; only zero frames is. */
+         if (!got)
          {
             if (loop())
             {
-               loop(false); // Avoid infinite recursion incause our audio clip is really short.
+               loop(false); /* the recursive call must not loop again */
                ScopeExit holder([this] { loop(true); });
 
-               if (ov_time_seek(&vf, 0) == 0)
-               {
-                  long unsigned int ret = render(buffer, frames);
-                  return rendered + ret;
-               }
-               else
-                  is_eof = true;
+               if (audio_transfer_seek(xfer, type, 0))
+                  return rendered + render(buffer, frames);
+
+               is_eof = true;
             }
             else
                is_eof = true;
@@ -289,32 +283,23 @@ namespace Audio
             return rendered;
          }
 
+         if (!is_mono)
          {
-            long in_frames = (ret / 2) / (is_mono ? 1 : Mixer::channels);
-            long i;
-
-            if (!is_mono)
-            {
-               for (i = 0; i < in_frames; i++)
-               {
-                  buffer[2 * i + 0] = pcm[2 * i + 0] / 32768.0f;
-                  buffer[2 * i + 1] = pcm[2 * i + 1] / 32768.0f;
-               }
-            }
-            else
-            {
-               for (i = 0; i < in_frames; i++)
-               {
-                  float v = pcm[i] / 32768.0f;
-                  buffer[2 * i + 0] = v;
-                  buffer[2 * i + 1] = v;
-               }
-            }
-
-            buffer   += in_frames * Mixer::channels;
-            frames   -= in_frames;
-            rendered += in_frames;
+            for (i = 0; i < got * Mixer::channels; i++)
+               buffer[i] = pcm[i];
          }
+         else
+         {
+            for (i = 0; i < got; i++)
+            {
+               buffer[2 * i + 0] = pcm[i];
+               buffer[2 * i + 1] = pcm[i];
+            }
+         }
+
+         buffer   += got * Mixer::channels;
+         frames   -= got;
+         rendered += got;
       }
 
       return rendered;

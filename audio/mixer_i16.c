@@ -2,6 +2,7 @@
  * MSVC C89. See mixer_i16.h for the contract. */
 
 #include "mixer_i16.h"
+#include "vorbis_i16.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -194,129 +195,16 @@ i16_stream_t *i16_pcm_stream_new(i16_buf_t *buf, int loop, int32_t volume_q15)
 }
 
 /* ------------------------------------------------------------------- *
- * WAV loader (16-bit PCM, mono/stereo, 44100 Hz)
+ * WAV loader
  * ------------------------------------------------------------------- */
 
-static INLINE unsigned read_le16(const unsigned char *p)
-{
-   return (unsigned)p[0] | ((unsigned)p[1] << 8);
-}
-
-static INLINE unsigned read_le32(const unsigned char *p)
-{
-   return  (unsigned)p[0]
-        | ((unsigned)p[1] << 8)
-        | ((unsigned)p[2] << 16)
-        | ((unsigned)p[3] << 24);
-}
-
+/* Was a hand-rolled parser that assumed a 44-byte header at a fixed
+ * offset and rejected anything else.  audio_transfer walks the chunk
+ * list and covers the compressed WAV variants too, and it is the same
+ * entry point the music path uses. */
 int16_t *wav_i16_load(const char *path, size_t *out_samples)
 {
-   unsigned char  header[44];
-   FILE          *file;
-   unsigned       channels;
-   unsigned       sample_rate;
-   unsigned       bits;
-   unsigned       riff_size;
-   unsigned       data_bytes;
-   size_t         in_samples;
-   size_t         read_samples;
-   int16_t       *raw;
-   int16_t       *pcm;
-
-   if (out_samples)
-      *out_samples = 0;
-
-   file = fopen(path, "rb");
-   if (!file)
-      return NULL;
-
-   if (fread(header, 1, sizeof(header), file) != sizeof(header))
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   if (    memcmp(header + 0,  "RIFF", 4) != 0
-        || memcmp(header + 8,  "WAVE", 4) != 0
-        || memcmp(header + 12, "fmt ", 4) != 0)
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   if (read_le16(header + 20) != 1) /* PCM */
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   channels    = read_le16(header + 22);
-   sample_rate = read_le32(header + 24);
-   bits        = read_le16(header + 34);
-
-   if (channels < 1 || channels > 2 || sample_rate != 44100 || bits != 16)
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   riff_size  = read_le32(header + 4);
-   data_bytes = riff_size + 8 - (unsigned)sizeof(header);
-
-   in_samples = data_bytes / sizeof(int16_t);
-   if (in_samples == 0)
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   raw = (int16_t*)malloc(in_samples * sizeof(int16_t));
-   if (!raw)
-   {
-      fclose(file);
-      return NULL;
-   }
-
-   read_samples = fread(raw, sizeof(int16_t), in_samples, file);
-   fclose(file);
-
-   /* Tolerate a short final read rather than rejecting the whole clip. */
-   if (read_samples == 0)
-   {
-      free(raw);
-      return NULL;
-   }
-   in_samples = read_samples;
-
-   if (channels == 2)
-   {
-      if (out_samples)
-         *out_samples = in_samples;
-      return raw;
-   }
-
-   /* Mono: duplicate each sample into a stereo frame. */
-   {
-      size_t i;
-      pcm = (int16_t*)malloc(in_samples * MIXER_I16_CHANNELS * sizeof(int16_t));
-      if (!pcm)
-      {
-         free(raw);
-         return NULL;
-      }
-
-      for (i = 0; i < in_samples; i++)
-      {
-         pcm[2 * i + 0] = raw[i];
-         pcm[2 * i + 1] = raw[i];
-      }
-
-      free(raw);
-      if (out_samples)
-         *out_samples = in_samples * MIXER_I16_CHANNELS;
-      return pcm;
-   }
+   return audio_i16_decode_file(path, out_samples);
 }
 
 /* ------------------------------------------------------------------- *

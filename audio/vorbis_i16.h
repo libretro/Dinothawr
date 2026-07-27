@@ -24,6 +24,13 @@ extern "C" {
 
 /* Required sample rate; mirrors the assertion in the float path. */
 #define VORBIS_I16_SAMPLE_RATE 44100
+#define AUDIO_I16_SAMPLE_RATE  VORBIS_I16_SAMPLE_RATE
+
+/* Decode any file audio_transfer recognises from its extension (WAV and
+ * Ogg Vorbis here) to an interleaved stereo int16 buffer.  Mono sources
+ * are duplicated to both channels.  Returns a malloc'd buffer and writes
+ * the int16 sample count to *out_samples, or NULL on any error. */
+int16_t *audio_i16_decode_file(const char *path, size_t *out_samples);
 
 /* Decode the whole file at 'path' to an interleaved stereo int16 buffer.
  * Mono sources are duplicated to both channels. Returns a new i16_buf_t

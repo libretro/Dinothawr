@@ -1,26 +1,28 @@
-/* Dinothawr - Ogg Vorbis -> interleaved stereo int16 decode (impl).
+/* Dinothawr - compressed audio -> interleaved stereo int16 decode (impl).
  * MSVC C89. See vorbis_i16.h.
  *
- * Decode is integer-only via Tremor's ov_read(): no float appears
- * anywhere on this path, so the produced PCM is bit-deterministic across
- * platforms. */
+ * Everything goes through libretro-common's audio_transfer facade over a
+ * data_transfer handle: the transfer owns the encoded bytes, the decoder
+ * borrows them, and WAV and Ogg Vorbis are the same code path.  The s16
+ * read quantises once on the way out of the decoder's own buffers, which
+ * for a float-internal codec like Vorbis is the minimum possible. */
 
 #include "vorbis_i16.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
-#include <tremor/ivorbisfile.h>
+#include <formats/audio.h>
+#include <formats/data_transfer.h>
 
 #include <retro_inline.h>
 
-/* Decode scratch, in int16 samples (8 KiB). */
-#define VORBIS_I16_CHUNK_SAMPLES 4096
+/* Decode scratch, in frames. */
+#define AUDIO_I16_CHUNK_FRAMES 2048
 
 /* Grow 'buf' (int16 capacity 'cap') so it can hold at least 'need'
  * int16 samples. Returns the (possibly moved) buffer, or NULL on OOM
  * after freeing the old buffer. */
-static int16_t *vorbis_i16_reserve(int16_t *buf, size_t *cap, size_t need)
+static int16_t *audio_i16_reserve(int16_t *buf, size_t *cap, size_t need)
 {
    size_t   new_cap;
    int16_t *grown;
@@ -44,67 +46,69 @@ static int16_t *vorbis_i16_reserve(int16_t *buf, size_t *cap, size_t need)
    return grown;
 }
 
-i16_buf_t *vorbis_i16_decode_file(const char *path)
+int16_t *audio_i16_decode_file(const char *path, size_t *out_samples)
 {
-   FILE           *fp;
-   OggVorbis_File  vf;
-   vorbis_info    *info;
-   i16_buf_t      *buf;
-   int16_t        *out     = NULL;
-   size_t          out_len = 0; /* int16 samples written    */
-   size_t          out_cap = 0; /* int16 samples allocated  */
-   int             channels;
-   int             is_mono;
-   int             bitstream;
-   int16_t         chunk[VORBIS_I16_CHUNK_SAMPLES];
+   const uint8_t       *ptr      = NULL;
+   size_t               len      = 0;
+   data_transfer_t     *dt       = NULL;
+   void                *xfer     = NULL;
+   int16_t             *out      = NULL;
+   size_t               out_len  = 0; /* int16 samples written   */
+   size_t               out_cap  = 0; /* int16 samples allocated */
+   unsigned             channels = 0;
+   unsigned             rate     = 0;
+   enum audio_type_enum type     = audio_decode_get_type(path);
+   int16_t              chunk[AUDIO_I16_CHUNK_FRAMES * MIXER_I16_CHANNELS];
 
-   fp = fopen(path, "rb");
-   if (!fp)
+   if (out_samples)
+      *out_samples = 0;
+
+   if (type == AUDIO_TYPE_NONE)
       return NULL;
 
-   /* ov_open takes ownership of fp; ov_clear() fcloses it. */
-   if (ov_open(fp, &vf, NULL, 0) < 0)
-   {
-      fclose(fp);
+   if (!(dt = data_transfer_open_prefix(path, 0)))
       return NULL;
-   }
 
-   info = ov_info(&vf, -1);
-   if (    !info
-        || info->rate     != VORBIS_I16_SAMPLE_RATE
-        || info->channels  < 1
-        || info->channels  > 2)
-   {
-      ov_clear(&vf);
-      return NULL;
-   }
-   channels = info->channels;
-   is_mono  = (channels == 1);
+   data_transfer_iterate(dt, 0);
+   ptr = data_transfer_ptr(dt, &len);
+
+   if (!data_transfer_complete(dt) || !ptr || !len)
+      goto error;
+
+   if (!(xfer = audio_transfer_new(type)))
+      goto error;
+
+   audio_transfer_set_buffer_ptr(xfer, type, (void*)ptr, len);
+
+   if (    !audio_transfer_start(xfer, type)
+        || !audio_transfer_info(xfer, type, &channels, &rate, NULL))
+      goto error;
+
+   if (rate != AUDIO_I16_SAMPLE_RATE || channels < 1 || channels > 2)
+      goto error;
 
    for (;;)
    {
-      long   bytes = ov_read(&vf, (char*)chunk, (int)sizeof(chunk),
-            &bitstream);
-      long   frames_in;
-      long   i;
+      size_t got = 0;
       size_t need;
+      size_t i;
 
-      if (bytes <= 0) /* 0 == EOF, < 0 == decode error: stop either way */
+      /* A short read is not end of stream; zero frames is. */
+      if (audio_transfer_read_s16(xfer, type, chunk,
+               AUDIO_I16_CHUNK_FRAMES, &got) < AUDIO_PROCESS_NEXT)
+         goto error;
+
+      if (!got)
          break;
 
-      frames_in = (bytes / 2) / channels; /* int16 samples / channels */
-
-      need = out_len + (size_t)frames_in * MIXER_I16_CHANNELS;
-      out  = vorbis_i16_reserve(out, &out_cap, need);
+      need = out_len + got * MIXER_I16_CHANNELS;
+      out  = audio_i16_reserve(out, &out_cap, need);
       if (!out)
-      {
-         ov_clear(&vf);
-         return NULL;
-      }
+         goto error_freed;
 
-      if (is_mono)
+      if (channels == 1)
       {
-         for (i = 0; i < frames_in; i++)
+         for (i = 0; i < got; i++)
          {
             int16_t s = chunk[i];
             out[out_len++] = s;
@@ -113,13 +117,14 @@ i16_buf_t *vorbis_i16_decode_file(const char *path)
       }
       else
       {
-         long n = frames_in * MIXER_I16_CHANNELS;
+         size_t n = got * MIXER_I16_CHANNELS;
          for (i = 0; i < n; i++)
             out[out_len++] = chunk[i];
       }
    }
 
-   ov_clear(&vf);
+   audio_transfer_free(xfer, type);
+   data_transfer_free(dt);
 
    if (!out || out_len == 0)
    {
@@ -135,10 +140,33 @@ i16_buf_t *vorbis_i16_decode_file(const char *path)
          out = fit;
    }
 
-   buf = i16_buf_new(out, out_len);
+   if (out_samples)
+      *out_samples = out_len;
+   return out;
+
+error:
+   if (out)
+      free(out);
+error_freed:
+   if (xfer)
+      audio_transfer_free(xfer, type);
+   data_transfer_free(dt);
+   return NULL;
+}
+
+i16_buf_t *vorbis_i16_decode_file(const char *path)
+{
+   size_t   samples = 0;
+   int16_t *pcm     = audio_i16_decode_file(path, &samples);
+   i16_buf_t *buf;
+
+   if (!pcm)
+      return NULL;
+
+   buf = i16_buf_new(pcm, samples);
    if (!buf)
    {
-      free(out);
+      free(pcm);
       return NULL;
    }
    return buf;

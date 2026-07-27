@@ -13,7 +13,8 @@
 #include <chrono>
 #include <queue>
 #include <mutex>
-#include <tremor/ivorbisfile.h>
+#include <formats/audio.h>
+#include <formats/data_transfer.h>
 #endif
 
 #ifndef M_PI
@@ -106,8 +107,12 @@ namespace Audio
          std::vector<float> decode();
 
       private:
+         /* The data_transfer owns the encoded bytes and the audio_transfer
+          * borrows them, so the two are torn down in that order. */
          std::string path;
-         OggVorbis_File vf;
+         data_transfer_t *dt;
+         void *xfer;
+         enum audio_type_enum type;
          bool is_eof;
          bool is_mono;
    };
