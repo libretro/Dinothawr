@@ -82,6 +82,14 @@ namespace Icy
          bool first;
          unsigned last;
 
+         /* Private shuffle state.  This used to be srand()/rand(): a core
+          * reseeding the global C PRNG walks over whatever the frontend
+          * or another statically linked core had set up, and gets walked
+          * over in turn.  time(NULL) also has one-second resolution, so
+          * two cores starting in the same second shuffled identically. */
+         uint32_t rng_state;
+         unsigned rng_next(unsigned n);
+
          /* int16 path: the next track is decoded off-thread, mirroring the
           * float loader, so a track change does not stall the game. */
          std::future<i16_buf_t*> i16_future;

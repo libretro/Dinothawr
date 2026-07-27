@@ -5,6 +5,8 @@
 #include <future>
 #include <chrono>
 
+#include <features/features_cpu.h>
+
 #include "audio/mixer_i16.h"
 #include "audio/vorbis_i16.h"
 
@@ -15,7 +17,15 @@ namespace Icy
    void BGManager::init(const vector<Track>& tracks)
    {
       this->tracks = tracks;
-      srand(time(NULL));
+
+      /* Seeded from the microsecond clock rather than time(NULL), whose
+       * one-second resolution made the seed the same for anything
+       * starting in the same second.  Zero is the one state xorshift
+       * cannot leave, so it is steered away from. */
+      rng_state = (uint32_t)cpu_features_get_time_usec();
+      if (!rng_state)
+         rng_state = 0x9e3779b9u;
+
       first = true;
       last = 0;
 
@@ -34,6 +44,21 @@ namespace Icy
       }
    }
 
+   /* xorshift32: enough for picking one of a handful of tracks, and it
+    * is ours, so nothing outside this object can perturb it or be
+    * perturbed by it. */
+   unsigned BGManager::rng_next(unsigned n)
+   {
+      rng_state ^= rng_state << 13;
+      rng_state ^= rng_state >> 17;
+      rng_state ^= rng_state << 5;
+
+      /* Multiply-shift rather than a modulo: no division, and none of
+       * the bias that taking a remainder of a power-of-two range by a
+       * count that does not divide it introduces. */
+      return (unsigned)(((uint64_t)rng_state * (uint64_t)n) >> 32);
+   }
+
    /* Choose the next track index: the first track initially, then a
     * random track that differs from the previous one. */
    unsigned BGManager::next_index()
@@ -47,7 +72,7 @@ namespace Icy
          return 0;
       }
 
-      index = rand() % tracks.size();
+      index = rng_next((unsigned)tracks.size());
       if (index == last)
          index = (index + 1) % tracks.size();
       last = index;
@@ -100,25 +125,10 @@ namespace Icy
       if (!tracks.size())
          return;
 
+      /* The float path used to inline a second copy of next_index(); the
+       * two are the same choice and drifting apart would be a bug. */
       if (!loader.size())
-      {
-         if (first)
-         {
-            loader.request_vorbis(tracks[0].path);
-            last = 0;
-         }
-         else
-         {
-            unsigned index = rand() % tracks.size();
-            if (index == last)
-               index = (index + 1) % tracks.size();
-
-            loader.request_vorbis(tracks[index].path);
-            last = index;
-         }
-
-         first = false;
-      }
+         loader.request_vorbis(tracks[next_index()].path);
 
       std::shared_ptr<std::vector<float> > ret = loader.flush();
 
