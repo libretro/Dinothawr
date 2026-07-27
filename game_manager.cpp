@@ -41,7 +41,7 @@ namespace Icy
       {
          Icy::GameManager::Chapter chapter = load_chapter(node, chapters.size());
          if (chapter.num_levels() > 0)
-            chapters.push_back(move(chapter));
+            chapters.push_back(std::move(chapter));
       }
 
       ui_target = RenderTarget(Game::fb_width, Game::fb_height);
@@ -139,7 +139,7 @@ namespace Icy
          i++;
       }
 
-      Chapter loaded_chap = Chapter(move(levels), chap.attribute("name").value());
+      Chapter loaded_chap = Chapter(std::move(levels), chap.attribute("name").value());
       loaded_chap.set_minimum_clear(chap.attribute("minimum_clear").as_int());
       return loaded_chap;
    }

@@ -10,7 +10,7 @@ endif
 
 include $(CORE_DIR)/Makefile.common
 
-COREFLAGS := -DHAVE_RPNG -Wall -DOV_EXCLUDE_STATIC_CALLBACKS -ffast-math -D_GLIBCXX_HAS_GTHREADS -DANDROID $(INCFLAGS)
+COREFLAGS := -DHAVE_RPNG -D__STDC_FORMAT_MACROS -Wall -DOV_EXCLUDE_STATIC_CALLBACKS -ffast-math -D_GLIBCXX_HAS_GTHREADS -DANDROID $(INCFLAGS)
 
 GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
 ifneq ($(GIT_VERSION)," unknown")

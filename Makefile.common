@@ -1,6 +1,13 @@
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
 DEPS_DIR          := $(CORE_DIR)/deps
-INCFLAGS := -I$(DEPS_DIR) -I$(CORE_DIR)/audio -I$(DEPS_DIR)/pugixml -I$(DEPS_DIR)/tremor -I$(DEPS_DIR)/ogg -I$(LIBRETRO_COMM_DIR)/include
+# Only $(DEPS_DIR) itself: every consumer reaches the vendored libraries
+# through a directory prefix (<ogg/ogg.h>, <tremor/ivorbisfile.h>,
+# <pugixml/pugixml.hpp>), and their own sources use quoted includes, which
+# resolve relative to the including file.  Putting the subdirectories on the
+# search path as well put deps/tremor/block.h in front of the system headers,
+# and on Apple's case-insensitive filesystems CoreFoundation's <Block.h>
+# resolved to it.
+INCFLAGS := -I$(DEPS_DIR) -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 

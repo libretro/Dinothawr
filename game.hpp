@@ -316,9 +316,13 @@ namespace Icy
                static const std::size_t save_game_size = 512;
          };
 
+         /* chapters must be declared before save: SaveManager holds a
+          * reference to it and is handed that reference in the member
+          * initialiser list, so it has to be constructed first. */
+         std::vector<Chapter> chapters;
+
          SaveManager save;
 
-         std::vector<Chapter> chapters;
          std::unique_ptr<Game> game;
          std::string dir;
 

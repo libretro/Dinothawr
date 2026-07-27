@@ -126,7 +126,7 @@ namespace Blit
       pixel_ptr = &pixel;
       transform(orig.begin(), orig.end(), back_inserter(pix), transform_func);
 
-      data = make_shared<Surface::Data>(move(pix), data->w, data->h);
+      data = make_shared<Surface::Data>(std::move(pix), data->w, data->h);
    }
 
    void Surface::ignore_camera(bool ignore)
@@ -140,7 +140,7 @@ namespace Blit
    }
 
    Surface::Data::Data(vector<Pixel> pixels, int w, int h)
-      : pixels(move(pixels)), w(w), h(h)
+      : pixels(std::move(pixels)), w(w), h(h)
    {}
 
    Surface::Data::Data(Pixel pixel, int w, int h)

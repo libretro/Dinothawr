@@ -381,8 +381,8 @@ CORE_DIR := .
 include Makefile.common
 
 OBJECTS  := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o) $(SOURCES_ASM:.S=.o)
-CXXFLAGS += -DHAVE_RPNG -ffast-math $(fpic) -I. -DOV_EXCLUDE_STATIC_CALLBACKS $(INCFLAGS)
-CFLAGS   += -DHAVE_RPNG -ffast-math $(fpic) $(INCFLAGS)
+CXXFLAGS += -DHAVE_RPNG -D__STDC_FORMAT_MACROS -ffast-math $(fpic) -I. -DOV_EXCLUDE_STATIC_CALLBACKS $(INCFLAGS)
+CFLAGS   += -DHAVE_RPNG -D__STDC_FORMAT_MACROS -ffast-math $(fpic) $(INCFLAGS)
 
 ifeq (,$(findstring msvc,$(platform)))
 	CXXFLAGS += -Wall

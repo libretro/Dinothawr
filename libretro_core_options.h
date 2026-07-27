@@ -50,7 +50,7 @@ struct retro_core_option_definition option_defs_us[] = {
       },
       "Auto",
    },
-   { NULL, NULL, NULL, { NULL, NULL }, NULL },
+   { NULL, NULL, NULL, {{ NULL, NULL }}, NULL },
 };
 
 /* RETRO_LANGUAGE_JAPANESE */

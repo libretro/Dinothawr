@@ -25,7 +25,7 @@ namespace Audio
    void Mixer::add_stream(shared_ptr<Stream> str)
    {
       LockGuard guard(*m_lock);
-      streams.push_back(move(str));
+      streams.push_back(std::move(str));
    }
 
    static bool erase_mixer_stream(const shared_ptr<Stream> &str)
@@ -351,7 +351,7 @@ namespace Audio
          if (finished.size())
          {
             std::vector<float> f = finished.front();
-            std::shared_ptr<std::vector<float> > ret = make_shared<vector<float>>(move(f));
+            std::shared_ptr<std::vector<float> > ret = make_shared<vector<float>>(std::move(f));
             finished.pop();
             return ret;
          }

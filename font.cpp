@@ -96,18 +96,18 @@ namespace Blit
    
    void FontCluster::add_font(const string& font, Pos offset, Pixel color, string id)
    {
-      std::vector<OffsetFont>& fonts = fonts_map[move(id)];
+      std::vector<OffsetFont>& fonts = fonts_map[std::move(id)];
 
       OffsetFont tmp(font);
       tmp.set_color(color);
       tmp.offset = offset;
 
-      fonts.push_back(move(tmp));
+      fonts.push_back(std::move(tmp));
    }
 
    void FontCluster::set_id(string id)
    {
-      current_id = move(id);
+      current_id = std::move(id);
    }
 
    bool FontCluster::func_x (const OffsetFont& a, const OffsetFont& b) {

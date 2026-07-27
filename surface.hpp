@@ -70,6 +70,10 @@ namespace Blit
    class Renderable
    {
       public:
+         /* Polymorphic base: Level and SurfaceCluster derive from it and are
+          * held in containers that destroy through this type. */
+         virtual ~Renderable() {}
+
          virtual void render(RenderTarget& target) const = 0;
          virtual Pos pos() const { return position; }
          virtual void pos(Pos position) { this->position = position; }
