@@ -57,6 +57,7 @@ int16_t *audio_i16_decode_file(const char *path, size_t *out_samples)
    size_t               out_cap  = 0; /* int16 samples allocated */
    unsigned             channels = 0;
    unsigned             rate     = 0;
+   uint64_t             total_frames = 0;
    enum audio_type_enum type     = audio_decode_get_type(path);
    int16_t              chunk[AUDIO_I16_CHUNK_FRAMES * MIXER_I16_CHANNELS];
 
@@ -81,13 +82,56 @@ int16_t *audio_i16_decode_file(const char *path, size_t *out_samples)
    audio_transfer_set_buffer_ptr(xfer, type, (void*)ptr, len);
 
    if (    !audio_transfer_start(xfer, type)
-        || !audio_transfer_info(xfer, type, &channels, &rate, NULL))
+        || !audio_transfer_info(xfer, type, &channels, &rate,
+              &total_frames))
       goto error;
 
    if (rate != AUDIO_I16_SAMPLE_RATE || channels < 1 || channels > 2)
       goto error;
 
-   for (;;)
+   /* One read of the whole stream when the length is known.  No more
+    * blocking than the chunked loop below - that ran the file to
+    * completion without yielding either, and the caller runs this under
+    * std::async - but it sizes the buffer once instead of growing it by
+    * doubling, which transiently holds both buffers at every move. */
+   if (total_frames)
+   {
+      size_t got = 0;
+
+      out_cap = (size_t)total_frames * MIXER_I16_CHANNELS;
+      if (!(out = (int16_t*)malloc(out_cap * sizeof(int16_t))))
+         goto error;
+
+      if (audio_transfer_read_s16(xfer, type, out, (size_t)total_frames,
+               &got) >= AUDIO_PROCESS_NEXT && got)
+      {
+         if (channels == 1)
+         {
+            /* Decoded as one channel into the head of the buffer.
+             * Expand backwards: every write lands at 2i >= i, so it
+             * never lands on a sample still to be read. */
+            size_t i = got;
+            while (i-- > 0)
+            {
+               int16_t v      = out[i];
+               out[2 * i + 0] = v;
+               out[2 * i + 1] = v;
+            }
+         }
+         out_len = got * MIXER_I16_CHANNELS;
+      }
+      else
+      {
+         /* The single read declined; fall back to the chunked loop. */
+         free(out);
+         out     = NULL;
+         out_cap = 0;
+         if (!audio_transfer_seek(xfer, type, 0))
+            goto error;
+      }
+   }
+
+   if (!out_len) for (;;)
    {
       size_t got = 0;
       size_t need;
