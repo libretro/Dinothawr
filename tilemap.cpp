@@ -64,8 +64,7 @@ namespace Blit
       if (!width || !height || !tilewidth || !tileheight)
          throw std::logic_error("Tilemap is malformed.");
 
-      SurfaceCache cache;
-      Blit::Surface surf = cache.from_image(Utils::join(dir, "/", source));
+      Blit::Surface surf = surface_cache().from_image(Utils::join(dir, "/", source));
 
       if (surf.rect().w != width || surf.rect().h != height)
          throw std::logic_error("Tilemap geometry does not correspond with image values.");
@@ -93,7 +92,7 @@ namespace Blit
          auto itr = attrs.find("sprite");
 
          if (itr != attrs.end())
-            tiles[id] = cache.from_sprite(Utils::join(dir, "/", itr->second));
+            tiles[id] = surface_cache().from_sprite(Utils::join(dir, "/", itr->second));
 
          tiles[id].attr() = std::move(attrs);
       }

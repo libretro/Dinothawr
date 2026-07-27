@@ -52,9 +52,9 @@ namespace Icy
 
    void GameManager::init_menu_sprite(xml_node doc)
    {
-      level_complete = cache.from_image(Utils::join(dir, "/", doc.child("game").child("level_complete").attribute("source").value()));
+      level_complete = Blit::surface_cache().from_image(Utils::join(dir, "/", doc.child("game").child("level_complete").attribute("source").value()));
 
-      lock_sprite = cache.from_image(Utils::join(dir, "/", doc.child("game").child("lock_sprite").attribute("source").value()));
+      lock_sprite = Blit::surface_cache().from_image(Utils::join(dir, "/", doc.child("game").child("lock_sprite").attribute("source").value()));
       lock_sprite.ignore_camera(true);
       int arrow_x = (Game::fb_width - lock_sprite.rect().w) / 2;
       lock_sprite.rect().pos = Pos( arrow_x, 160 );
@@ -64,13 +64,13 @@ namespace Icy
       level_complete.rect().pos = Pos( complete_x, complete_y );
       level_complete.ignore_camera(true);
 
-      level_select_bg = cache.from_image(Utils::join(dir, "/", doc.child("game").child("menu_bg").attribute("source").value()));
+      level_select_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", doc.child("game").child("menu_bg").attribute("source").value()));
       level_select_bg.ignore_camera(true);
 
-      end_credit_bg = cache.from_image(Utils::join(dir, "/", doc.child("game").child("end_bg").attribute("source").value()));
+      end_credit_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", doc.child("game").child("end_bg").attribute("source").value()));
       end_credit_bg.ignore_camera(true);
 
-      game_bg = cache.from_image(Utils::join(dir, "/", doc.child("game").child("game_bg").attribute("source").value()));
+      game_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", doc.child("game").child("game_bg").attribute("source").value()));
       game_bg.ignore_camera(true);
    }
 
@@ -146,7 +146,7 @@ namespace Icy
 
    void GameManager::init_menu(const string& level)
    {
-      Surface surf = cache.from_image(Utils::join(dir, "/", level));
+      Surface surf = Blit::surface_cache().from_image(Utils::join(dir, "/", level));
 
       target = RenderTarget(Game::fb_width, Game::fb_height);
       target.blit(surf, Rect());

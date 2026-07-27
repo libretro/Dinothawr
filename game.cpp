@@ -52,9 +52,9 @@ namespace Icy
 
       std::basic_string<char> sprite_path = Utils::find_or_default(layer->attr, "player_sprite", "");
       if (sprite_path.empty())
-         player = cache.from_sprite(Utils::join(level, ".sprite"));
+         player = Blit::surface_cache().from_sprite(Utils::join(level, ".sprite"));
       else
-         player = cache.from_sprite(Utils::join(Utils::basedir(level), "/", sprite_path));
+         player = Blit::surface_cache().from_sprite(Utils::join(Utils::basedir(level), "/", sprite_path));
 
       int x     = Utils::stoi(Utils::find_or_default(layer->attr, "start_x", "1"));
       int y     = Utils::stoi(Utils::find_or_default(layer->attr, "start_y", "1"));

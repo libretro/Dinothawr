@@ -148,7 +148,6 @@ namespace Icy
          Blit::RenderTarget target;
          Blit::Surface player;
          Blit::Pos player_off;
-         Blit::SurfaceCache cache;
          Blit::FontCluster *font;
          const Blit::Surface *bg;
          Input facing;
@@ -330,7 +329,6 @@ namespace Icy
          unsigned m_current_level;
          State m_game_state;
 
-         Blit::SurfaceCache cache;
          Blit::RenderTarget target;
 
          Blit::RenderTarget ui_target;

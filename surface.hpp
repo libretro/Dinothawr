@@ -120,6 +120,23 @@ namespace Blit
          std::shared_ptr<const Surface::Data> load_image(const std::string& path);
    };
 
+   /* One cache for the whole session.
+    *
+    * Every user of this used to hold its own: a local inside the tileset
+    * and glyph loaders (destroyed at the end of the function, so those
+    * cached nothing at all), and a member on each Game, which is
+    * constructed per level.  The tilesets and the dino sprites are shared
+    * across levels, so they were re-read and re-decoded once per level -
+    * about 2100 file opens over a session where 57 files exist.
+    *
+    * Sharing is safe because Surface::Data is immutable once cached:
+    * Surface::pixel_raw is a const accessor, and refill_color replaces
+    * the shared_ptr with a fresh Data rather than writing through it.
+    * The only mutable pixel buffer is RenderTarget's, which is its own.
+    * All loading happens on the thread that calls retro_load_game and
+    * retro_run - the core's only worker threads decode audio. */
+   SurfaceCache& surface_cache();
+
    class RenderTarget
    {
       public:

@@ -8,6 +8,12 @@ using namespace pugi;
 
 namespace Blit
 {
+   SurfaceCache& surface_cache()
+   {
+      static SurfaceCache cache;
+      return cache;
+   }
+
    Surface SurfaceCache::from_image(const std::string& path)
    {
       std::shared_ptr<const Blit::Surface::Data> ptr = cache[path];

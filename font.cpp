@@ -31,8 +31,7 @@ namespace Blit
       if (!width || !height || !glyphwidth || !glyphheight)
          throw logic_error("Invalid glpyh arguments.");
 
-      SurfaceCache cache;
-      Surface surf = cache.from_image(Utils::join(dir, "/", source));
+      Surface surf = Blit::surface_cache().from_image(Utils::join(dir, "/", source));
 
       if (surf.rect().w != width * glyphwidth || surf.rect().h != height * glyphheight)
          throw logic_error("Geometry of font and attributes do not match.");
