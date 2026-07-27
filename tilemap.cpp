@@ -6,19 +6,18 @@
 #include <map>
 #include <utility>
 #include <string>
-#include "pugixml/pugixml.hpp"
+#include "xml.hpp"
 
-using namespace pugi;
 
 namespace Blit
 {
    Tilemap::Tilemap(const std::string& path) : dir(Utils::basedir(path))
    {
-      xml_document doc;
+      Blit::Xml::Document doc;
       if (!doc.load_file(path.c_str()))
          throw std::runtime_error(Utils::join("Failed to load XML map: ", path, "."));
 
-      xml_node map   = doc.child("map");
+      Blit::Xml::Node map   = doc.child("map");
       width      = map.attribute("width").as_int();
       height     = map.attribute("height").as_int();
       tilewidth  = map.attribute("tilewidth").as_int();
@@ -35,7 +34,7 @@ namespace Blit
          add_layer(tiles, layer, tilewidth, tileheight);
    }
 
-   std::map<std::string, std::string> Tilemap::get_attributes(xml_node parent, const std::string& child) const
+   std::map<std::string, std::string> Tilemap::get_attributes(Blit::Xml::Node parent, const std::string& child) const
    {
       std::map<std::string, std::string> attrs;
 
@@ -49,14 +48,14 @@ namespace Blit
       return attrs;
    }
 
-   void Tilemap::add_tileset(std::map<unsigned, Surface>& tiles, xml_node node)
+   void Tilemap::add_tileset(std::map<unsigned, Surface>& tiles, Blit::Xml::Node node)
    {
       int first_gid  = node.attribute("firstgid").as_int();
       int id_cnt     = 0;
       int tilewidth  = node.attribute("tilewidth").as_int();
       int tileheight = node.attribute("tileheight").as_int();
 
-      pugi::xml_node image     = node.child("image");
+      Blit::Xml::Node image     = node.child("image");
       const char *source    = image.attribute("source").value();
       int width      = image.attribute("width").as_int();
       int height     = image.attribute("height").as_int();
@@ -98,7 +97,7 @@ namespace Blit
       }
    }
 
-   void Tilemap::add_layer(std::map<unsigned, Surface>& tiles, xml_node node,
+   void Tilemap::add_layer(std::map<unsigned, Surface>& tiles, Blit::Xml::Node node,
          int tilewidth, int tileheight)
    {
       Layer layer;

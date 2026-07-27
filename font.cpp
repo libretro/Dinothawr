@@ -1,10 +1,9 @@
 #include "font.hpp"
-#include "pugixml/pugixml.hpp"
+#include "xml.hpp"
 #include "utils.hpp"
 
 #include <stdexcept>
 
-using namespace pugi;
 using namespace std;
 
 namespace Blit
@@ -15,11 +14,11 @@ namespace Blit
    {
       string dir = Utils::basedir(font);
 
-      xml_document doc;
+      Blit::Xml::Document doc;
       if (!doc.load_file(font.c_str()))
          throw runtime_error(Utils::join("Failed to load font: ", font, "."));
 
-      xml_node glyph       = doc.child("font").child("glyphs");
+      Blit::Xml::Node glyph       = doc.child("font").child("glyphs");
       char start_ascii = glyph.attribute("startascii").as_int();
 
       int width   = glyph.attribute("width").as_int();

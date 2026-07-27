@@ -117,6 +117,16 @@ namespace Blit
 
       private:
          std::map<std::string, std::shared_ptr<const Surface::Data>> cache;
+         /* from_sprite's XML parse, kept alongside the pixel cache: the
+          * faces it names were already shared, but the .sprite document
+          * behind them was re-read and re-parsed on every call - 50 times
+          * each for dino.sprite and frozen.sprite over a session. */
+         struct SpriteDef
+         {
+            std::vector<Surface::Alt> alts;
+            std::string start_id;
+         };
+         std::map<std::string, SpriteDef> sprites;
          std::shared_ptr<const Surface::Data> load_image(const std::string& path);
    };
 

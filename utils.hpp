@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <functional>
 
-#include <pugixml/pugixml.hpp>
+#include "xml.hpp"
 
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #if GCC_VERSION >= 70000
@@ -124,14 +124,14 @@ namespace Blit
       class xml_node_walker
       {
          public:
-            xml_node_walker(pugi::xml_node parent, const std::string& child, const std::string& attr)
+            xml_node_walker(Blit::Xml::Node parent, const std::string& child, const std::string& attr)
                : parent(parent), child(child), attr(attr)
             {}
 
             class iterator
             {
                public:
-                  iterator(pugi::xml_node parent, const char* child, const char* attr) :
+                  iterator(Blit::Xml::Node parent, const char* child, const char* attr) :
                      child_name(child), attr(attr), node(parent.child(child)), val(node.attribute(attr).value()) {}
 
                   iterator() : child_name(NULL), attr(NULL) {}
@@ -152,7 +152,7 @@ namespace Blit
                private:
                   const char* child_name;
                   const char* attr;
-                  pugi::xml_node node;
+                  Blit::Xml::Node node;
                   std::string val;
             };
 
@@ -160,7 +160,7 @@ namespace Blit
             iterator end() { return iterator(); }
 
          private:
-            pugi::xml_node parent;
+            Blit::Xml::Node parent;
             std::string child;
             std::string attr;
       };

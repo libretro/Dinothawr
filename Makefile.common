@@ -1,12 +1,5 @@
 LIBRETRO_COMM_DIR := $(CORE_DIR)/libretro-common
-DEPS_DIR          := $(CORE_DIR)/deps
-# Only $(DEPS_DIR) itself: pugixml is reached through a directory prefix
-# (<pugixml/pugixml.hpp>) and its own sources use quoted includes, which
-# resolve relative to the including file.  Putting the subdirectories on
-# the search path as well used to put deps/tremor/block.h in front of the
-# system headers, and on Apple's case-insensitive filesystems
-# CoreFoundation's <Block.h> resolved to it.
-INCFLAGS := -I$(DEPS_DIR) -I$(LIBRETRO_COMM_DIR)/include
+INCFLAGS := -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 
@@ -21,7 +14,6 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 	$(CORE_DIR)/surface_cache.cpp \
 	$(CORE_DIR)/surface_cluster.cpp \
 	$(CORE_DIR)/tilemap.cpp \
-	$(DEPS_DIR)/pugixml/pugixml.cpp \
 	$(CORE_DIR)/audio/mixer.cpp
 
 SOURCES_C :=
@@ -49,6 +41,7 @@ SOURCES_C += \
 				 $(LIBRETRO_COMM_DIR)/formats/image_transfer.c \
 				 $(LIBRETRO_COMM_DIR)/formats/vorbis/rvorbis.c \
 				 $(LIBRETRO_COMM_DIR)/formats/wav/rwav.c \
+				 $(LIBRETRO_COMM_DIR)/formats/xml/rxml.c \
 				 $(LIBRETRO_COMM_DIR)/formats/png/rpng.c \
 				 $(LIBRETRO_COMM_DIR)/formats/png/rpng_apng.c \
 				 $(LIBRETRO_COMM_DIR)/memmap/memmap.c \

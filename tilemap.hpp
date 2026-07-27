@@ -2,7 +2,7 @@
 #define TILEMAP_HPP__
 
 #include "surface.hpp"
-#include "pugixml/pugixml.hpp"
+#include "xml.hpp"
 
 #include <string>
 #include <set>
@@ -58,11 +58,11 @@ namespace Blit
          std::string dir;
 
          void add_tileset(std::map<unsigned, Surface>& tiles,
-               pugi::xml_node node);
+               Blit::Xml::Node node);
          void add_layer(std::map<unsigned, Surface>& tiles,
-               pugi::xml_node node, int tilewidth, int tileheight);
+               Blit::Xml::Node node, int tilewidth, int tileheight);
 
-         std::map<std::string, std::string> get_attributes(pugi::xml_node, const std::string& child) const;
+         std::map<std::string, std::string> get_attributes(Blit::Xml::Node, const std::string& child) const;
    };
 }
 

@@ -345,12 +345,12 @@ namespace Icy
          std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
 
          void init_menu(const std::string& title);
-         void init_menu_sprite(pugi::xml_node doc);
+         void init_menu_sprite(Blit::Xml::Node game_node);
          void init_level(unsigned chapter, unsigned level);
-         void init_sfx(pugi::xml_node doc);
-         void init_bg(pugi::xml_node doc);
+         void init_sfx(Blit::Xml::Node game_node);
+         void init_bg(Blit::Xml::Node game_node);
 
-         Chapter load_chapter(pugi::xml_node chap_node, int chapter);
+         Chapter load_chapter(Blit::Xml::Node chap_node, int chapter);
          const Level& get_selected_level() const;
 
          void step_title();
