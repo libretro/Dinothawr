@@ -11,6 +11,9 @@
 #include "utils.hpp"
 #include "audio/mixer.hpp"
 
+#include <file/file_path.h>
+#include <streams/file_stream.h>
+
 #include "libretro_core_options.h"
 
 using namespace Blit::Utils;
@@ -134,10 +137,44 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 void retro_set_environment(retro_environment_t cb)
 {
    bool no_content = true;
+   struct retro_vfs_interface_info vfs_iface_info;
 
    environ_cb = cb;
    libretro_set_core_options(environ_cb);
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_content);
+
+   /* Hand the frontend's VFS to libretro-common, which is what every
+    * read in this core now goes through: the asset loaders (rpng via
+    * image_transfer, the WAV and Ogg decoders via audio_transfer) all
+    * sit on data_transfer, which reads through filestream, and the
+    * existence check in retro_load_game goes through path_is_valid.
+    * Without this they fall back to the built-in stdio implementation
+    * and paths only the frontend can resolve - archive members,
+    * Android content:// documents, frontend overrides - do not open. */
+   /* Ask for the newest interface each consumer can use and step down
+    * until the frontend agrees: filestream needs 2, path_is_valid's stat
+    * needs 3, and 4 buys the 64-bit stat.  The frontend refuses outright
+    * rather than negotiating, so the descent is ours to walk - and each
+    * init re-checks the version it was handed, so a version 2 result
+    * wires up filestream and correctly leaves path on its fallback. */
+   {
+      static const unsigned wanted[] = { 4, 3, 2 };
+      unsigned i;
+
+      for (i = 0; i < sizeof(wanted) / sizeof(wanted[0]); i++)
+      {
+         vfs_iface_info.required_interface_version = wanted[i];
+         vfs_iface_info.iface                      = NULL;
+
+         if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE,
+                  &vfs_iface_info))
+         {
+            filestream_vfs_init(&vfs_iface_info);
+            path_vfs_init(&vfs_iface_info);
+            break;
+         }
+      }
+   }
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb)
@@ -319,7 +356,11 @@ void retro_reset(void)
 
 bool retro_load_game(const struct retro_game_info* info)
 {
-   if (info)
+   /* The core sets SET_SUPPORT_NO_GAME, and a frontend starting it with
+    * no content may hand over either a NULL info or a zeroed one - the
+    * second of which used to reach std::string(NULL) and segfault.
+    * Both mean the same thing: fall through to the system directory. */
+   if (info && info->path)
    {
       game_path     = info->path;
       game_path_dir = basedir(game_path);
@@ -327,7 +368,6 @@ bool retro_load_game(const struct retro_game_info* info)
    else
    {
       const char *system_dir = NULL;
-      FILE *game_file        = NULL;
       bool game_file_exists  = false;
 
       /* Get system directory */
@@ -337,12 +377,11 @@ bool retro_load_game(const struct retro_game_info* info)
          game_path_dir = join(system_dir, "/", "dinothawr");
          game_path     = join(game_path_dir, "/", "dinothawr.game");
 
-         game_file = fopen(game_path.c_str(), "r");
-         if (game_file)
-         {
-            game_file_exists = true;
-            fclose(game_file);
-         }
+         /* path_is_valid stats through the frontend's VFS, so a system
+          * directory the frontend can reach but stdio cannot still
+          * resolves - and opening the file only to close it again was
+          * never what this wanted to ask. */
+         game_file_exists = path_is_valid(game_path.c_str());
       }
 
       if (!game_file_exists)

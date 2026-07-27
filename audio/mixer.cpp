@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <stdexcept>
 #include <iostream>
-#include <fstream>
 
 #include <audio/audio_mix.h>
 #include <formats/audio.h>
