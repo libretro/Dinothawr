@@ -5,8 +5,6 @@
 #include <future>
 #include <chrono>
 
-#include <features/features_cpu.h>
-
 #include "audio/mixer_i16.h"
 #include "audio/vorbis_i16.h"
 
@@ -18,11 +16,22 @@ namespace Icy
    {
       this->tracks = tracks;
 
-      /* Seeded from the microsecond clock rather than time(NULL), whose
-       * one-second resolution made the seed the same for anything
-       * starting in the same second.  Zero is the one state xorshift
-       * cannot leave, so it is steered away from. */
-      rng_state = (uint32_t)cpu_features_get_time_usec();
+      /* Seeded from the track list, not from a clock.  A wall-clock seed
+       * makes a session unreproducible for no gain the player can hear -
+       * the order is arbitrary either way - and it is one of the two
+       * reasons this core's audio output differs run to run.  Hashing
+       * the paths keeps a different game shuffling differently while
+       * making one game's order a function of its content.  Zero is the
+       * one state xorshift cannot leave, so it is steered away from. */
+      rng_state = 2166136261u;
+      for (std::vector<Track>::const_iterator t = this->tracks.begin();
+            t != this->tracks.end(); ++t)
+      {
+         const char *c;
+         for (c = t->path.c_str(); *c; c++)
+            rng_state = (rng_state ^ (uint32_t)(unsigned char)*c)
+                      * 16777619u;
+      }
       if (!rng_state)
          rng_state = 0x9e3779b9u;
 
