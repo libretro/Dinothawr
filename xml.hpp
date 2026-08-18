@@ -6,6 +6,7 @@
 #include <string>
 
 #include <formats/rxml.h>
+#include <streams/file_stream.h>
 
 /* A thin, pugixml-shaped view over libretro-common's rxml.
  *
@@ -98,13 +99,44 @@ namespace Blit
             Document(const Document&) = delete;
             Document& operator=(const Document&) = delete;
 
-            /* rxml reads through filestream, so this goes through the
-             * frontend's VFS like every other read in the core. */
+            /* rxml no longer reads files itself, so the read happens
+             * here - still through filestream, so it still goes through
+             * the frontend's VFS like every other read in the core.
+             *
+             * filestream_read_file() is one bulk read with the
+             * sequential hint, and its buffer already meets the
+             * ownership contract of rxml_load_document_owned() (heap,
+             * len + 1 bytes, NUL at [len]), so the document adopts it
+             * outright: no chunked reads, no second copy of the bytes.
+             * On failure - either the read or the parse - the buffer is
+             * already released (rxml frees it before returning NULL). */
             bool load_file(const char *path)
             {
+               void   *buf = NULL;
+               int64_t len = 0;
+
                if (doc)
+               {
                   rxml_free_document(doc);
-               doc = rxml_load_document(path);
+                  doc = NULL;
+               }
+
+               if (!filestream_read_file(path, &buf, &len) || !buf)
+                  return false;
+
+               doc = rxml_load_document_owned(
+                     static_cast<char*>(buf), static_cast<size_t>(len));
+
+               /* A parse that produced no root element - an empty or
+                * all-prolog file - is a failed load as far as the
+                * callers are concerned: their next step is child() on
+                * the root, and "Failed to load X" beats the generic
+                * malformed-content error they would otherwise reach. */
+               if (doc && !rxml_root_node(doc))
+               {
+                  rxml_free_document(doc);
+                  doc = NULL;
+               }
                return doc != NULL;
             }
 

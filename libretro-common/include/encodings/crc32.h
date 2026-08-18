@@ -1,7 +1,7 @@
 /* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
- * The following license statement only applies to this file (compat_strl.c).
+ * The following license statement only applies to this file (crc32.h).
  * ---------------------------------------------------------------------------------------
  *
  * Permission is hereby granted, free of charge,
@@ -20,33 +20,38 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <compat/strl.h>
+#ifndef _LIBRETRO_ENCODINGS_CRC32_H
+#define _LIBRETRO_ENCODINGS_CRC32_H
 
-/* Implementation of strlcpy()/strlcat() based on OpenBSD. */
+#include <stdint.h>
+#include <stddef.h>
 
-#if !(defined(__MACH__) && defined(__APPLE__))
-size_t strlcpy(char *s, const char *in, size_t len)
-{
-   size_t src_len = strlen(in);
-   if (len)
-   {
-      size_t cpy_len = src_len < len - 1 ? src_len : len - 1;
-      memcpy(s, in, cpy_len);
-      s[cpy_len] = '\0';
-   }
-   return src_len;
-}
+#include <retro_common_api.h>
 
-/* The destination scan is bounded by 'len': 's' is not required to
- * contain a NUL within the first 'len' bytes. When it does not, no
- * bytes are written and the return value is len + strlen(source),
- * matching OpenBSD, Darwin and glibc. */
-size_t strlcat(char *s, const char *source, size_t len)
-{
-   const char *nul = (const char*)memchr(s, 0, len);
-   size_t dst_len  = nul ? (size_t)(nul - s) : len;
-   if (dst_len == len)
-      return len + strlen(source);
-   return dst_len + strlcpy(s + dst_len, source, len - dst_len);
-}
+RETRO_BEGIN_DECLS
+
+/**
+ * Computes a buffer's CRC32 checksum.
+ *
+ * @param crc The initial CRC32 value.
+ * @param buf The buffer to calculate the CRC32 checksum of.
+ * @param len The length of the data in \c buf.
+ * @return The CRC32 checksum of the given buffer.
+ */
+uint32_t encoding_crc32(uint32_t crc, const uint8_t *buf, size_t len);
+
+/* Ogg page CRC: the same generator polynomial taken MSB-first
+ * (0x04C11DB7) rather than reflected, seeded with zero and with no
+ * final complement. Ogg specifies it that way, so it is not
+ * interchangeable with encoding_crc32() above. */
+uint32_t encoding_crc32_ogg(uint32_t crc, const uint8_t *buf, size_t len);
+
+/* CRC-16/CCITT-FALSE: polynomial 0x1021 MSB-first, no final xor. The
+ * seed is the caller's; this variant is conventionally started at
+ * 0xFFFF. Sixteen bits and a different polynomial from either
+ * function above, so it is not interchangeable with them. */
+uint16_t encoding_crc16_ccitt(uint16_t crc, const uint8_t *buf, size_t len);
+
+RETRO_END_DECLS
+
 #endif
