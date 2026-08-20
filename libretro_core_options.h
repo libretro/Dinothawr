@@ -31,9 +31,9 @@ struct retro_core_option_definition option_defs_us[] = {
       "dino_framerate",
       "Frame rate",
       "Frame rate the core runs at. 'Auto' follows the frontend's configured "
-      "refresh rate. Note: Dinothawr's logic is fixed-step, so frame rates "
-      "above 60 run the game (and its animations) proportionally faster; "
-      "audio output stays at 44.1 kHz.",
+      "refresh rate. The simulation is rate-independent: higher rates run the "
+      "game at the same speed with finer motion and proportionally lower "
+      "input latency, not faster. Audio output stays at 44.1 kHz.",
       {
          { "Auto", NULL },
          { "50",   NULL },

@@ -58,6 +58,10 @@ static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
 
+/* Rate the frontend drives retro_run at, and therefore the rate the
+ * simulation is stepped at. See Icy::frames_to_ticks(). */
+static double   g_framerate = 60.0;
+
 namespace Icy
 {
    Audio::Mixer& get_mixer() { return mixer; }
@@ -66,6 +70,19 @@ namespace Icy
    const string& get_basedir() { return game_path_dir; }
    SFXManager& get_sfx() { return sfx; }
    BGManager& get_bg() { return bg_music; }
+
+   unsigned frames_to_ticks(unsigned frames60)
+   {
+      /* Rounded so a duration lands on the nearest whole tick rather
+       * than always short, and floored at one tick so nothing becomes
+       * instantaneous at low rates. At 60 Hz this is the identity, which
+       * is what keeps the default rate identical to the fixed-step sim
+       * this replaced. */
+      double ticks = frames60 * g_framerate / 60.0 + 0.5;
+      if (ticks < 1.0)
+         return 1;
+      return (unsigned)ticks;
+   }
 }
 
 #define AUDIO_SAMPLE_RATE 44100
@@ -77,7 +94,6 @@ namespace Icy
 static unsigned audio_frames = AUDIO_SAMPLE_RATE / 60;
 static int16_t  audio_buffer  [2 * AUDIO_MAX_FRAMES];
 static float    audio_buffer_f[2 * AUDIO_MAX_FRAMES];
-static double   g_framerate = 60.0;
 static bool     s_av_info_queried = false;
 
 static void check_system_specs(void)

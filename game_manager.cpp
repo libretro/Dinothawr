@@ -279,8 +279,17 @@ namespace Icy
 
    void GameManager::step_menu_slide()
    {
-      ui_target.camera_move(menu_slide_dir);
+      Blit::Pos want;
+
       slide_cnt++;
+      if (slide_cnt > slide_end)
+         slide_cnt = slide_end;
+
+      want = Pos(slide_total.x * (int)slide_cnt / (int)slide_end,
+                 slide_total.y * (int)slide_cnt / (int)slide_end);
+      ui_target.camera_move(want - slide_moved);
+      slide_moved = want;
+
       if (slide_cnt >= slide_end)
       {
          m_game_state = State::Menu;
@@ -307,8 +316,13 @@ namespace Icy
    {
       m_game_state = State::MenuSlide;
 
-      slide_cnt = 0;
-      slide_end = cnt;
+      slide_cnt   = 0;
+      /* cnt is the duration in 60 Hz frames; dir * cnt is the distance it
+       * used to cover one tick at a time. Keep the distance, convert the
+       * duration. */
+      slide_end   = frames_to_ticks(cnt);
+      slide_total = (int)cnt * dir;
+      slide_moved = Pos();
 
       menu_slide_dir = dir;
 

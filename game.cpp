@@ -21,7 +21,8 @@ namespace Icy
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font)
       : map(level_path), target(fb_width, fb_height), font(&font),
          camera(target, player.rect(), Pos(map.pix_width(), map.pix_height())),
-         won_frame_cnt(0), is_sliding(false), best_pushes(best_pushes), pushes(0), 
+         won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
+         leg_moved(0), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
    {
       m_won_early = false;
@@ -32,7 +33,8 @@ namespace Icy
    Game::Game(const string& level_path)
       : map(level_path), target(fb_width, fb_height), font(NULL),
          camera(target, player.rect(), Pos(map.pix_width(), map.pix_height())),
-         won_frame_cnt(0), is_sliding(false), push(true) 
+         won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
+         leg_moved(0), push(true)
    {
       m_won_early = false;
       set_initial_pos(level_path);
@@ -123,7 +125,7 @@ namespace Icy
 
       std::vector<std::reference_wrapper<Blit::SurfaceCluster::Elem> > goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
 
-      const unsigned frame_per_iter = 24;
+      const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
 
       std::string state = "frozen";
       if (won_frame_cnt >= 3 * frame_per_iter)
@@ -167,7 +169,8 @@ namespace Icy
 
    bool Game::won() const
    {
-      return m_won_early || (won_frame_cnt >= won_frame_cnt_limit);
+      return m_won_early
+         || (won_frame_cnt >= frames_to_ticks(won_frame_cnt_limit));
    }
 
    static bool is_game_won(const Blit::SurfaceCluster::Elem& a, const Blit::SurfaceCluster::Elem& b)
@@ -237,10 +240,14 @@ namespace Icy
 
       // Animation from index 1 to 4, "neutral position" in 0. "Slippery" animations in 5 and 6.
       unsigned anim_index;
+      /* frame_cnt counts ticks, so the divisor is the tick count that
+       * spans what used to be 10 frames - the cycle changes at the same
+       * wall-clock moments at 60 Hz and at 240. */
+      unsigned period = frames_to_ticks(anim_frames_per_step);
       if (is_sliding)
-         anim_index = (frame_cnt / 10) % 2 + 5;
+         anim_index = (frame_cnt / period) % 2 + 5;
       else
-         anim_index = (frame_cnt / 10) % 4 + 1;
+         anim_index = (frame_cnt / period) % 4 + 1;
 
       player.active_alt_index(anim_index);
    }
@@ -346,6 +353,7 @@ namespace Icy
       if (!map.collision(tile_pos + (2 * offset)))
       {
          stepper = bind(&Game::tile_stepper, this, ref(*tile), offset);
+         begin_leg(offset.x ? map.tile_width() : map.tile_height());
          stepper_cnt = 0;
          player_walking = false;
          player.active_alt_index(0);
@@ -363,23 +371,56 @@ namespace Icy
       if (!is_offset_collision(player, offset))
       {
          stepper = bind(&Game::tile_stepper, this, ref(player), offset);
+         begin_leg(offset.x ? map.tile_width() : map.tile_height());
          player_walking = true;
       }
    }
 
+   /* A leg covers one tile. At 60 Hz the sim moved 2 px per tick, so a
+    * 16 px tile took 8; keeping that as the duration and interpolating
+    * the position across it gives 1 px per tick at 120 Hz and lands on
+    * the grid exactly at the end of the leg whatever the rate. */
+   void Game::begin_leg(int tile_size)
+   {
+      leg_tick  = 0;
+      leg_ticks = frames_to_ticks(tile_size / 2);
+      leg_moved = 0;
+   }
+
    bool Game::tile_stepper(Surface& surf, Pos step_dir)
    {
-      surf.rect() += 2 * step_dir;
+      int tile_size = step_dir.x ? map.tile_width() : map.tile_height();
+      int want;
+
+      /* leg_ticks is fixed for the duration of a leg - begin_leg() is the
+       * only writer, and it runs when a leg starts, never during one.
+       * That is what guarantees want reaches exactly tile_size on the
+       * last tick, so a surface always comes to rest on the tile grid
+       * even if the frame rate changed while it was in flight. A rate
+       * change is picked up by the next leg. */
+      leg_tick++;
+      want = (int)((unsigned)tile_size * leg_tick / leg_ticks);
+      if (want > tile_size)
+         want = tile_size;
+
+      surf.rect() += (want - leg_moved) * step_dir;
+      leg_moved    = want;
 
       if (!player_walking)
       {
-         unsigned alt = stepper_cnt <= 6 ? 7 : 0;
+         unsigned alt = stepper_cnt < frames_to_ticks(push_anim_frames) ? 7 : 0;
          player.active_alt_index(alt);
          stepper_cnt++;
       }
 
-      if (surf.rect().pos.x % map.tile_width() || surf.rect().pos.y % map.tile_height())
+      /* Mid-leg. The tick count decides this rather than grid alignment:
+       * at rates above 2 ticks per pixel the first ticks of a leg round
+       * to zero movement, which leaves the surface still aligned and
+       * would otherwise read as a completed leg. */
+      if (leg_tick < leg_ticks)
          return true;
+
+      begin_leg(tile_size);
 
       if (is_offset_collision(surf, step_dir))
       {

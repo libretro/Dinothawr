@@ -24,6 +24,25 @@ namespace Icy
    bool audio_is_float();
    const std::string& get_basedir();
 
+   /* retro_run advances the game exactly once per call, so the sim is
+    * stepped at the frontend's frame rate.
+    *
+    * The sim was written against a fixed 60 Hz tick and says so all over
+    * game.cpp - the walk cycle changes every 10 ticks, a tile takes 8,
+    * the win animation counts to 24. Read literally at 120 Hz those are
+    * half the durations they were written as, which is the dino walking
+    * at double speed with an animation too fast to read. Every one of
+    * them is a *duration* now, passed through here, so the game keeps
+    * its original speed while actually updating - and sampling input -
+    * once per output frame. That is the point of running at 120: not
+    * smoother 60 Hz motion, but a sim that responds in half the time.
+    *
+    * Returns the ticks spanning the same wall-clock time as @frames60
+    * frames of the original sim. Never less than 1, so a duration can't
+    * collapse to nothing at low rates, and exactly @frames60 at 60 Hz,
+    * which is what keeps the default rate bit-for-bit what it was. */
+   unsigned frames_to_ticks(unsigned frames60);
+
    enum class Input : unsigned
    {
       Up = 0,
@@ -164,7 +183,12 @@ namespace Icy
 
          unsigned won_frame_cnt;
          bool m_won_early;
-         enum { won_frame_cnt_limit = 60 * 5 };
+         /* Durations in 60 Hz frames; frames_to_ticks() turns them into
+          * tick counts at the rate actually being run. */
+         enum { won_frame_cnt_limit  = 60 * 5 };
+         enum { won_frames_per_iter  = 24 };
+         enum { anim_frames_per_step = 10 };
+         enum { push_anim_frames     = 7 };
          bool won_condition();
 
          std::function<bool (Input)> m_input_cb;
@@ -177,6 +201,16 @@ namespace Icy
          bool player_walking;
          bool is_sliding;
          unsigned stepper_cnt;
+
+         /* A tile_stepper leg - one tile of travel - is interpolated
+          * across leg_ticks ticks rather than advanced by a fixed 2 px,
+          * so it takes the same time at any rate and still lands exactly
+          * on the grid. leg_moved is how far into the tile the surface
+          * has been carried so far. */
+         unsigned leg_tick;
+         unsigned leg_ticks;
+         int      leg_moved;
+         void begin_leg(int tile_size);
 
          void set_initial_pos(const std::string& level);
          void update_player();
@@ -389,6 +423,12 @@ namespace Icy
 
          Blit::Pos menu_slide_dir;
 
+         /* The slide used to be slide_end applications of menu_slide_dir,
+          * one per tick. It is now a total displacement interpolated over
+          * the tick count spanning the same wall-clock time, so the pan
+          * takes as long at any rate and ends exactly on slide_total. */
+         Blit::Pos slide_total;
+         Blit::Pos slide_moved;
          unsigned slide_cnt;
          unsigned slide_end;
 
