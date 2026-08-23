@@ -25,6 +25,15 @@ extern "C" {
 
 bool rpng_load_image_argb(const char *path, uint32_t **data, unsigned *width, unsigned *height);
 
+/* Decodes every frame of an APNG at 'path' into an array of ARGB
+ * buffers of identical dimensions.  A still PNG loads as a single
+ * frame, so callers need not distinguish the two.  On success returns
+ * the frame count and stores a malloc'd array of malloc'd frames in
+ * *frames; the caller frees each frame and then the array.  Returns 0
+ * on failure with *frames set to NULL. */
+unsigned rpng_load_apng_argb(const char *path, uint32_t ***frames,
+      unsigned *width, unsigned *height);
+
 #ifdef __cplusplus
 }
 #endif

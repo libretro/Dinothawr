@@ -128,6 +128,12 @@ namespace Blit
          };
          std::map<std::string, SpriteDef> sprites;
          std::shared_ptr<const Surface::Data> load_image(const std::string& path);
+         /* Face inside an APNG: decodes the whole animation on the first
+          * request for any of its frames and fills one cache entry per
+          * frame under "path#N" keys, so the file is read and decoded
+          * once however many faces reference it. */
+         std::shared_ptr<const Surface::Data> load_apng_frame(
+               const std::string& path, unsigned frame);
    };
 
    /* One cache for the whole session.

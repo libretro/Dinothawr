@@ -9,12 +9,12 @@
    <face id="up" source="dino_up_slide2.png"/>
    <face id="up" source="dinopush_up.png"/>
    <face id="down" source="dino_down.png"/>
-   <face id="down" source="dino_down_walk1.png"/>
-   <face id="down" source="dino_down_walk2.png"/>
-   <face id="down" source="dino_down_walk3.png"/>
-   <face id="down" source="dino_down_walk4.png"/>
-   <face id="down" source="dino_down_slide1.png"/>
-   <face id="down" source="dino_down_slide2.png"/>
+   <face id="down" source="dino_down.apng" frame="0"/>
+   <face id="down" source="dino_down.apng" frame="1"/>
+   <face id="down" source="dino_down.apng" frame="2"/>
+   <face id="down" source="dino_down.apng" frame="3"/>
+   <face id="down" source="dino_down.apng" frame="4"/>
+   <face id="down" source="dino_down.apng" frame="5"/>
    <face id="down" source="dinopush_down.png"/>
    <face id="left" source="dino_left.png"/>
    <face id="left" source="dino_left_walk1.png"/>
