@@ -1,5 +1,6 @@
 #include "tilemap.hpp"
 #include <cstring>
+#include <file/file_path.h>
 #include "utils.hpp"
 
 #include <iostream>
@@ -74,6 +75,22 @@ namespace Blit
       std::size_t src_len = std::strlen(source);
       bool apng = src_len >= 5 &&
          std::strcmp(source + src_len - 5, ".apng") == 0;
+
+      /* Content in the wild mixes level and asset generations - an
+       * updated assets/ folder next to older .tmx files or the other
+       * way around - so when the named form is absent and the sibling
+       * with the other extension exists, load that one instead. */
+      if (!path_is_valid(path.c_str()))
+      {
+         std::basic_string<char> alt = apng
+            ? path.substr(0, path.size() - 5) + ".png"
+            : path.substr(0, path.size() - 4) + ".apng";
+         if (path_is_valid(alt.c_str()))
+         {
+            path = alt;
+            apng = !apng;
+         }
+      }
 
       if (apng)
       {
