@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Dinothawr</string>
+
+    <string name="start">Start</string>
+    <string name="controls">Controls</string>
+    <string name="instructions">Instructions</string>
+    <string name="options">Options</string>
+    <string name="credits">Credits</string>
+    <string name="quit">Quit</string>
+
+    <string name="title_image">Title image</string>
+    <string name="extracting_assets_please_wait_">Extracting assets, please wait ...</string>
+
+    <string name="agnes_heyer">Agnes Heyer</string>
+    <string name="_art_n_level_design">" Art\n Level design"</string>
+    <string name="hans_kristian_arntzen">Hans-Kristian Arntzen</string>
+    <string name="_programming_n_music">" Programming\n Music\n Level design"</string>
+    <string name="software_used">Software used</string>
+    <string name="retroarch"><![CDATA[<a href="https://www.libretro.com">RetroArch</a>]]></string>
+    <string name="libvorbis"><![CDATA[<a href="https://xiph.org/vorbis/">libvorbis</a>]]></string>
+    <string name="pugixml"><![CDATA[<a href="https://pugixml.org">pugixml</a>]]></string>
+
+    <string name="opt_overlay_title">Gamepad overlay</string>
+    <string name="opt_overlay_summary">Displays an on-screen gamepad. Useful for touch-only devices.</string>
+    <string name="opt_purist_title">Pixel purist mode</string>
+    <string name="opt_purist_summary">Play without filtering. Scaling is only done in whole steps.</string>
+    <string name="opt_audio_title">Enable audio</string>
+    <string name="opt_timer_title">Timer as FPS reference</string>
+    <string name="opt_timer_summary">Use the system timer instead of VSync to pace the game. Can cause jittery video. Only enable when necessary.</string>
+
+</resources>
