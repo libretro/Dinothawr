@@ -1,4 +1,5 @@
 #include "tilemap.hpp"
+#include <cstring>
 #include "utils.hpp"
 
 #include <iostream>
@@ -63,20 +64,44 @@ namespace Blit
       if (!width || !height || !tilewidth || !tileheight)
          throw std::logic_error("Tilemap is malformed.");
 
-      Blit::Surface surf = surface_cache().from_image(Utils::join(dir, "/", source));
-
-      if (surf.rect().w != width || surf.rect().h != height)
-         throw std::logic_error("Tilemap geometry does not correspond with image values.");
-
       std::map<std::basic_string<char>, std::basic_string<char> > global_attr = get_attributes(node.child("properties"), "property");
 
-      for (int y = 0; y < height; y += tileheight)
+      /* An .apng tileset carries one tile per frame, in the same
+       * row-major order the sheet was cut in, so the local tile id is
+       * the frame number.  The image element's width/height keep
+       * describing the virtual sheet so the tile count is unchanged. */
+      std::basic_string<char> path = Utils::join(dir, "/", source);
+      std::size_t src_len = std::strlen(source);
+      bool apng = src_len >= 5 &&
+         std::strcmp(source + src_len - 5, ".apng") == 0;
+
+      if (apng)
       {
-         for (int x = 0; x < width; x += tilewidth, id_cnt++)
+         int count = (width / tilewidth) * (height / tileheight);
+         for (; id_cnt < count; id_cnt++)
          {
             int id = first_gid + id_cnt;
-            tiles[id] = surf.sub({{x, y}, tilewidth, tileheight});
-            std::copy(global_attr.begin(), global_attr.end(), std::inserter(tiles[id].attr(), tiles[id].attr().begin())); 
+            tiles[id] = surface_cache().from_animation(path, id_cnt);
+            if (tiles[id].rect().w != tilewidth || tiles[id].rect().h != tileheight)
+               throw std::logic_error("Tilemap geometry does not correspond with image values.");
+            std::copy(global_attr.begin(), global_attr.end(), std::inserter(tiles[id].attr(), tiles[id].attr().begin()));
+         }
+      }
+      else
+      {
+         Blit::Surface surf = surface_cache().from_image(path);
+
+         if (surf.rect().w != width || surf.rect().h != height)
+            throw std::logic_error("Tilemap geometry does not correspond with image values.");
+
+         for (int y = 0; y < height; y += tileheight)
+         {
+            for (int x = 0; x < width; x += tilewidth, id_cnt++)
+            {
+               int id = first_gid + id_cnt;
+               tiles[id] = surf.sub({{x, y}, tilewidth, tileheight});
+               std::copy(global_attr.begin(), global_attr.end(), std::inserter(tiles[id].attr(), tiles[id].attr().begin())); 
+            }
          }
       }
 

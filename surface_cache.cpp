@@ -24,6 +24,11 @@ namespace Blit
       return cache[path];
    }
 
+   Surface SurfaceCache::from_animation(const std::string& path, unsigned frame)
+   {
+      return Surface(load_apng_frame(path, frame));
+   }
+
    Surface SurfaceCache::from_sprite(const std::string& path)
    {
       std::map<std::string, SpriteDef>::iterator cached = sprites.find(path);

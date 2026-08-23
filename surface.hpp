@@ -114,6 +114,9 @@ namespace Blit
       public:
          Surface from_image(const std::string& path);
          Surface from_sprite(const std::string& path);
+         /* One frame of an APNG as a standalone surface; the whole
+          * animation is decoded and cached on the first request. */
+         Surface from_animation(const std::string& path, unsigned frame);
 
       private:
          std::map<std::string, std::shared_ptr<const Surface::Data>> cache;
