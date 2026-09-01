@@ -48,6 +48,7 @@ ifneq (,$(findstring unix,$(platform)))
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
 	SHARED := -shared -Wl,--version-script=link.T -Wl,--no-undefined
+	HAVE_PTHREAD = 1
 
 # OS X
 else ifeq ($(platform), osx)
@@ -147,6 +148,7 @@ else ifeq ($(platform), qnx)
 	AR = QCC -Vgcc_ntoarmv7le
 	CXXFLAGS += -D__BLACKBERRY_QNX__
 	CXXFLAGS += -DARM
+	HAVE_PTHREAD = 1
 
 # Nintendo Switch (libnx)
 else ifeq ($(platform), libnx)
@@ -185,6 +187,7 @@ else ifeq ($(platform), classic_armv7_a7)
 	ASFLAGS += $(CFLAGS)
 	HAVE_NEON = 1
 	ARCH = arm
+	HAVE_PTHREAD = 1
 	LDFLAGS += -marm -mtune=cortex-a7 -mfpu=neon-vfpv4
 	ifeq ($(shell echo `$(CC) -dumpversion` "< 4.9" | bc -l), 1)
 	  CFLAGS += -march=armv7-a
@@ -240,6 +243,7 @@ else ifeq ($(platform), gcw0)
 	SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
 	fpic := -fPIC
 	PLATFORM_DEFINES += -DDINGUX -fomit-frame-pointer -march=mips32 -mtune=mips32r2 -mhard-float
+	HAVE_PTHREAD = 1
 
 # Miyoo
 else ifeq ($(platform), miyoo)
@@ -250,6 +254,7 @@ else ifeq ($(platform), miyoo)
 	SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
 	fpic := -fPIC
 	CFLAGS += -mcpu=arm926ej-s
+	HAVE_PTHREAD = 1
 
 # Windows MSVC 2017 all architectures
 else ifneq (,$(findstring windows_msvc2017,$(platform)))
@@ -358,6 +363,7 @@ endif
 # webOS (32-bit)
 ifneq (,$(or $(findstring webos,$(CROSS_COMPILE)),$(findstring starfish,$(CROSS_COMPILE))))
 	HAVE_NEON = 1
+	HAVE_PTHREAD = 1
 endif
 
 ifeq ($(DEBUG), 1)
@@ -389,6 +395,15 @@ ifeq (,$(findstring msvc,$(platform)))
 endif
 
 LIBS += -lm
+
+# rthreads' POSIX backend calls pthread directly, and on glibc older than
+# 2.34 those symbols live in libpthread rather than libc. Windows takes
+# the Win32 backend, Apple platforms carry pthread in libSystem, and the
+# console targets use their native thread APIs, so this is only for the
+# platforms that link a separate libpthread.
+ifeq ($(HAVE_PTHREAD),1)
+LIBS += -lpthread
+endif
 
 OBJOUT   = -o 
 LINKOUT  = -o 

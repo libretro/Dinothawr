@@ -21,6 +21,7 @@ SOURCES_C :=
 SOURCES_C += $(CORE_DIR)/rpng_front.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_i16.c
+SOURCES_C += $(CORE_DIR)/audio/async_job.c
 
 ifeq ($(STATIC_LINKING), 1)
 else
@@ -46,6 +47,7 @@ SOURCES_C += \
 				 $(LIBRETRO_COMM_DIR)/formats/png/rpng.c \
 				 $(LIBRETRO_COMM_DIR)/formats/png/rpng_apng.c \
 				 $(LIBRETRO_COMM_DIR)/memmap/memmap.c \
+				 $(LIBRETRO_COMM_DIR)/rthreads/rthreads.c \
 				 $(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_deflate.c \
