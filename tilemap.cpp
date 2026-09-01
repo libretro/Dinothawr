@@ -188,7 +188,7 @@ namespace Blit
    {
       for (auto& layer : m_layers)
          layer.cluster.pos(position);
-      Renderable::pos(position);
+      this->position = position;
    }
 
    void Tilemap::render(RenderTarget& target) const

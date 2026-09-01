@@ -553,7 +553,8 @@ namespace Icy
    }
 
    GameManager::Level::Level(const string& path, const Blit::Surface& bg)
-      : m_path(path), completion(false), best_pushes(0)
+      : position(blit_pos_zero()), m_path(path), completion(false),
+      best_pushes(0)
    {
       Game game{path};
       game.set_bg(bg);

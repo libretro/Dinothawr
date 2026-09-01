@@ -140,36 +140,20 @@ namespace Blit
 
    class RenderTarget;
 
-   class Renderable
-   {
-      public:
-         /* Pos is a C aggregate with no constructor, so members of this
-          * type have to be given their zero explicitly. */
-         Renderable() : position(blit_pos_zero()) {}
-
-         /* Polymorphic base: Level and SurfaceCluster derive from it and are
-          * held in containers that destroy through this type. */
-         virtual ~Renderable() {}
-
-         virtual void render(RenderTarget& target) const = 0;
-         virtual Pos pos() const { return position; }
-         virtual void pos(Pos position) { this->position = position; }
-
-         void move(Pos offset) { pos(pos() + offset); }
-
-      protected:
-         Pos position;
-   };
-
    /* A wrapper over blit_surface_cluster_t, so the engine's Renderable
     * dispatch still reaches it. The elements belong to the C struct;
     * this only forwards. */
-   class SurfaceCluster : public Renderable
+   class SurfaceCluster
    {
       public:
          typedef blit_cluster_elem_t Elem;
 
-         SurfaceCluster() { blit_surface_cluster_init(&c); }
+         SurfaceCluster() : position(blit_pos_zero())
+         { blit_surface_cluster_init(&c); }
+
+         Pos pos() const { return position; }
+         void pos(Pos p) { position = p; }
+         void move(Pos offset) { position += offset; }
 
          SurfaceCluster(const SurfaceCluster& other)
          {
@@ -232,6 +216,7 @@ namespace Blit
          void render(RenderTarget& target) const;
 
       private:
+         Pos position;
          blit_surface_cluster_t c;
    };
 

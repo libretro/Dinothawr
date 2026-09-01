@@ -287,10 +287,14 @@ namespace Icy
 
       private:
 
-         class Level : public Blit::Renderable
+         class Level
          {
             public:
-               Level() : completion(false), best_pushes(0) {}
+               Level() : position(blit_pos_zero()),
+                  completion(false), best_pushes(0) {}
+
+               Blit::Pos pos() const { return position; }
+               void pos(Blit::Pos p) { position = p; }
 
                Level(const std::string& path, const Blit::Surface& bg);
                const std::string& path() const { return m_path; }
@@ -307,6 +311,7 @@ namespace Icy
                unsigned get_best_pushes() const { return best_pushes; }
 
             private:
+               Blit::Pos position;
                std::string m_path;
                std::string m_name;
                Blit::Surface preview;

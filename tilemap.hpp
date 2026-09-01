@@ -10,7 +10,7 @@
 
 namespace Blit
 {
-   class Tilemap : public Renderable
+   class Tilemap
    {
       public:
          struct Layer
@@ -28,7 +28,9 @@ namespace Blit
          std::vector<Layer>& layers() { return m_layers; }
          const std::vector<Layer>& layers() const { return m_layers; }
 
+         Pos pos() const { return position; }
          void pos(Pos position);
+         void move(Pos offset) { pos(position + offset); }
          void render(RenderTarget& target) const;
          void render_until_layer(unsigned index, RenderTarget& target) const;
          void render_after_layer(unsigned index, RenderTarget& target) const;
@@ -54,6 +56,8 @@ namespace Blit
          bool collision(Pos tile) const;
 
       private:
+         Blit::Pos position;
+
          std::vector<Layer> m_layers;
          std::set<Pos> collisions;
 
