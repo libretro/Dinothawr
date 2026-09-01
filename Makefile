@@ -388,7 +388,7 @@ ifeq (,$(findstring msvc,$(platform)))
 	CXXFLAGS += -Wall
 endif
 
-LIBS += -lm -lpthread
+LIBS += -lm
 
 OBJOUT   = -o 
 LINKOUT  = -o 
