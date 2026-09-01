@@ -41,6 +41,41 @@ int blit_surface_init_filled(blit_surface_t *surf, blit_pixel_t fill,
    return 1;
 }
 
+int blit_surface_init_alts(blit_surface_t *surf, blit_alt_table_t *alts,
+      const char *start_id)
+{
+   size_t               count = blit_alt_table_size(alts);
+   blit_surface_data_t *first;
+   size_t               i;
+
+   blit_surface_init(surf);
+
+   if (count == 0)
+      return 0;
+
+   /* Every face has to be the same size: the surface carries one rect
+    * and switching face must not change where it sits. */
+   first = blit_alt_table_data_at(alts, 0);
+   for (i = 1; i < count; i++)
+   {
+      blit_surface_data_t *face = blit_alt_table_data_at(alts, i);
+
+      if (!face || face->w != first->w || face->h != first->h)
+         return 0;
+   }
+
+   surf->alts = blit_alt_table_ref(alts);
+   surf->rect = blit_rect(blit_pos_zero(), first->w, first->h);
+
+   if (!blit_surface_set_active_alt(surf, start_id, 0))
+   {
+      blit_surface_release(surf);
+      return 0;
+   }
+
+   return 1;
+}
+
 void blit_surface_retain(const blit_surface_t *surf)
 {
    blit_surface_data_ref(surf->data);

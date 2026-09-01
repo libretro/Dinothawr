@@ -29,15 +29,6 @@ namespace Blit
       public:
          typedef blit_surface_data_t Data;
 
-         /* Borrowed: the session cache owns a reference to every face
-          * for as long as it lives, and a Surface built from a set of
-          * alts takes its own. */
-         struct Alt
-         {
-            Data *data;
-            std::string tag;
-         };
-
          Surface() { blit_surface_init(&s); }
 
          Surface(Pixel pix, int width, int height)
@@ -49,7 +40,9 @@ namespace Blit
          /* Takes its own reference; the caller keeps theirs. */
          Surface(Data *data) { blit_surface_init_data(&s, data); }
 
-         Surface(const std::vector<Alt>& alts, const std::string& start_id);
+         /* Shows @start_id from @alts, taking its own reference on the
+          * table. */
+         Surface(blit_alt_table_t *alts, const char *start_id);
 
          Surface(const Surface& other) : s(other.s)
          { blit_surface_retain(&s); }
@@ -239,9 +232,11 @@ namespace Blit
           * faces it names were already shared, but the .sprite document
           * behind them was re-read and re-parsed on every call - 50 times
           * each for dino.sprite and frozen.sprite over a session. */
+         /* A parsed .sprite: its face table and the face it starts on.
+          * The cache owns one reference on the table. */
          struct SpriteDef
          {
-            std::vector<Surface::Alt> alts;
+            blit_alt_table_t *alts;
             std::string start_id;
          };
          std::map<std::string, SpriteDef> sprites;

@@ -57,6 +57,13 @@ void blit_surface_init_data(blit_surface_t *surf,
 int blit_surface_init_filled(blit_surface_t *surf, blit_pixel_t fill,
       int w, int h);
 
+/* A surface over a face table, showing the face named @start_id. Takes
+ * its own reference on the table. Returns 0 when the table is empty,
+ * when its faces are not all the same size, or when @start_id names no
+ * face; the surface is left empty in every failure case. */
+int blit_surface_init_alts(blit_surface_t *surf, blit_alt_table_t *alts,
+      const char *start_id);
+
 /* Retain every table this surface points at. Call on a struct that was
  * duplicated by assignment, so the copy owns its own references. */
 void blit_surface_retain(const blit_surface_t *surf);

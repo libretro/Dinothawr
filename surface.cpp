@@ -6,37 +6,12 @@ using namespace std;
 
 namespace Blit
 {
-   static bool same_size_func(const vector<Surface::Alt>& alts, Pos size)
+   Surface::Surface(blit_alt_table_t *alts, const char *start_id)
    {
-      for( vector<Surface::Alt>::const_iterator alt = alts.begin(); alt!=alts.end(); alt++ )
-         if(size != blit_pos(alt->data->w, alt->data->h))
-            return false;
-      return true;
-   }
-
-   Surface::Surface(const vector<Alt>& alts, const string& start_id)
-   {
-      blit_surface_init(&s);
-
-      if (alts.empty())
-         throw logic_error("Alts is empty.");
-
-      {
-         Pos size = blit_pos(alts.front().data->w, alts.front().data->h);
-         s.rect = blit_rect(blit_pos_zero(), size.x, size.y);
-
-         if (!same_size_func(alts, size))
-            throw logic_error("Not all alts are of same size.");
-      }
-
-      if (!(s.alts = blit_alt_table_new()))
-         throw std::bad_alloc();
-
-      for( vector<Alt>::const_iterator alt = alts.begin(); alt!=alts.end(); alt++ )
-         if (!blit_alt_table_add(s.alts, alt->tag.c_str(), alt->data))
-            throw std::bad_alloc();
-
-      active_alt(start_id);
+      if (!blit_surface_init_alts(&s, alts, start_id))
+         throw logic_error(Utils::join(
+                  "Sprite has no faces, faces of differing size, or no "
+                  "face named \"", start_id ? start_id : "", "\"."));
    }
 
    void Surface::active_alt(const string& id, unsigned index)

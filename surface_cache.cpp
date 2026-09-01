@@ -33,8 +33,13 @@ namespace Blit
    SurfaceCache::~SurfaceCache()
    {
       std::map<std::string, Surface::Data*>::iterator it;
+      std::map<std::string, SpriteDef>::iterator sprite;
+
       for (it = cache.begin(); it != cache.end(); ++it)
          blit_surface_data_unref(it->second);
+
+      for (sprite = sprites.begin(); sprite != sprites.end(); ++sprite)
+         blit_alt_table_unref(sprite->second.alts);
    }
 
    Surface SurfaceCache::from_sprite(const std::string& path)
@@ -43,6 +48,7 @@ namespace Blit
       if (cached != sprites.end())
          return Surface(cached->second.alts, cached->second.start_id.c_str());
 
+
       {
          Blit::Xml::Document doc;
          if (!doc.load_file(path.c_str()))
@@ -50,6 +56,9 @@ namespace Blit
 
          std::basic_string<char> basedir = Utils::basedir(path);
          SpriteDef def;
+
+         if (!(def.alts = blit_alt_table_new()))
+            throw std::bad_alloc();
 
          Blit::Xml::Node sprite = doc.child("sprite");
          for (Blit::Xml::Node face = sprite.child("face"); face; face = face.next_sibling())
@@ -71,7 +80,8 @@ namespace Blit
                }
             }
 
-            def.alts.push_back(Surface::Alt{ptr, id});
+            if (!blit_alt_table_add(def.alts, id, ptr))
+               throw std::bad_alloc();
          }
 
          def.start_id = sprite.attribute("start_id").value();
