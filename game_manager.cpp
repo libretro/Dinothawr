@@ -22,6 +22,8 @@ namespace Icy
       old_pressed_menu_up(false), old_pressed_menu_down(false),
       old_pressed_menu_ok(false), old_pressed_menu(false),
       old_pressed_reset(false),
+      menu_slide_dir(blit_pos_zero()), slide_total(blit_pos_zero()),
+      slide_moved(blit_pos_zero()),
       slide_cnt(0), slide_end(1)
    {
       Blit::Xml::Document doc;
@@ -34,12 +36,12 @@ namespace Icy
       Blit::Xml::Node game_node = doc.child("game");
 
       string font_path = Utils::join(dir, "/", game_node.child("font").attribute("source").value());
-      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00), "yellow");
-      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00), "yellow");
-      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b), "white");
-      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff), "white");
-      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94), "lime");
-      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0), "lime");
+      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00), "yellow");
+      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00), "yellow");
+      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b), "white");
+      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff), "white");
+      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94), "lime");
+      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0), "lime");
 
       init_menu(game_node.child("title").attribute("source").value());
       init_menu_sprite(game_node);
@@ -65,6 +67,8 @@ namespace Icy
       old_pressed_menu_up(false), old_pressed_menu_down(false),
       old_pressed_menu_ok(false), old_pressed_menu(false),
       old_pressed_reset(false),
+      menu_slide_dir(blit_pos_zero()), slide_total(blit_pos_zero()),
+      slide_moved(blit_pos_zero()),
       slide_cnt(0), slide_end(1)
    {}
 
@@ -75,11 +79,11 @@ namespace Icy
       lock_sprite = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("lock_sprite").attribute("source").value()));
       lock_sprite.ignore_camera(true);
       int arrow_x = (Game::fb_width - lock_sprite.rect().w) / 2;
-      lock_sprite.rect().pos = Pos( arrow_x, 160 );
+      lock_sprite.rect().pos = blit_pos( arrow_x, 160 );
 
       int complete_x = preview_base_x + Game::fb_width / 2 - level_complete.rect().w - 2;
       int complete_y = preview_base_y + Game::fb_height / 2 - level_complete.rect().h - 2;
-      level_complete.rect().pos = Pos( complete_x, complete_y );
+      level_complete.rect().pos = blit_pos( complete_x, complete_y );
       level_complete.ignore_camera(true);
 
       level_select_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("menu_bg").attribute("source").value()));
@@ -152,7 +156,7 @@ namespace Icy
       for (auto& level : levels)
       {
          //cerr << "Found level: " << level.path() << endl;
-         level.pos(Pos(preview_base_x + i * preview_delta_x, preview_base_y + preview_delta_y * chapter));
+         level.pos(blit_pos(preview_base_x + i * preview_delta_x, preview_base_y + preview_delta_y * chapter));
 
          i++;
       }
@@ -167,7 +171,7 @@ namespace Icy
       Surface surf = Blit::surface_cache().from_image(Utils::join(dir, "/", level));
 
       target = RenderTarget(Game::fb_width, Game::fb_height);
-      target.blit(surf, Rect());
+      target.blit(surf, blit_rect_zero());
 
       font.set_id("yellow");
       font.render_msg(target, "Press OK/Push button", 160, 170, Font::RenderAlignment::Centered);
@@ -273,11 +277,11 @@ namespace Icy
       {
          unsigned chap = chap_select;
          if (chap < chapters.size() - 1 && !chapters[chap_select].cleared())
-            ui_target.blit(lock_sprite, Rect());
+            ui_target.blit(lock_sprite, blit_rect_zero());
 
          // Render tick if level is complete.
          if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
-            ui_target.blit(level_complete, Rect());
+            ui_target.blit(level_complete, blit_rect_zero());
 
          font.set_id("white");
          font.render_msg(ui_target, Utils::join(chap_select + 1,
@@ -294,13 +298,13 @@ namespace Icy
 
    void GameManager::step_menu_slide()
    {
-      Blit::Pos want;
+      Blit::Pos want = blit_pos_zero();
 
       slide_cnt++;
       if (slide_cnt > slide_end)
          slide_cnt = slide_end;
 
-      want = Pos(slide_total.x * (int)slide_cnt / (int)slide_end,
+      want = blit_pos(slide_total.x * (int)slide_cnt / (int)slide_end,
                  slide_total.y * (int)slide_cnt / (int)slide_end);
       ui_target.camera_move(want - slide_moved);
       slide_moved = want;
@@ -311,7 +315,7 @@ namespace Icy
          menu_slide_dir = {};
       }
 
-      ui_target.blit(level_select_bg, Rect());
+      ui_target.blit(level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -337,7 +341,7 @@ namespace Icy
        * duration. */
       slide_end   = frames_to_ticks(cnt);
       slide_total = (int)cnt * dir;
-      slide_moved = Pos();
+      slide_moved = blit_pos_zero();
 
       menu_slide_dir = dir;
 
@@ -346,7 +350,7 @@ namespace Icy
 
    void GameManager::step_menu()
    {
-      ui_target.blit(level_select_bg, Rect());
+      ui_target.blit(level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -492,7 +496,7 @@ namespace Icy
 
    void GameManager::step_end()
    {
-      ui_target.blit(end_credit_bg, Rect());
+      ui_target.blit(end_credit_bg, blit_rect_zero());
 
       bool pressed_menu_ok = m_input_cb(Input::Push);
       bool trigger_ok = pressed_menu_ok && !old_pressed_menu_ok;
@@ -581,13 +585,13 @@ namespace Icy
       game.iterate();
 
       preview = Surface(make_shared<Surface::Data>(std::move(data), preview_width, preview_height));
-      pos(Pos(Game::fb_width, Game::fb_height) / scale_factor - Pos(5, 5));
+      pos(blit_pos(Game::fb_width, Game::fb_height) / scale_factor - blit_pos(5, 5));
    }
 
    void GameManager::Level::render(RenderTarget& target) const
    {
       //preview.rect().pos = position;
-      target.blit_offset(preview, Rect(), position); 
+      target.blit_offset(preview, blit_rect_zero(), position); 
    }
 
    GameManager::SaveManager::SaveManager(vector<GameManager::Chapter> &chaps)

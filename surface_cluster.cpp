@@ -21,7 +21,7 @@ namespace Blit
    {
       for (std::vector<Blit::SurfaceCluster::Elem>::const_iterator surf = elems.begin(); surf != elems.end(); surf++) 
       {
-         target.blit_offset(surf->surf, Rect(),
+         target.blit_offset(surf->surf, blit_rect_zero(),
                position + (func ? func(surf->offset) : surf->offset));
       }
    }

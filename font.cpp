@@ -39,7 +39,7 @@ namespace Blit
       {
          for (int x = 0; x < width; x++, start_ascii++)
          {
-            surf_map[start_ascii] = surf.sub(Rect(Pos(x * glyphwidth, y * glyphheight),
+            surf_map[start_ascii] = surf.sub(blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
                   glyphwidth, glyphheight));
 
             surf_map[start_ascii].ignore_camera(true);
@@ -75,7 +75,7 @@ namespace Blit
          for (std::string::iterator c = line->begin(); c!=line->end(); c++)
          {
             const Surface& surf = surface(*c);
-            target.blit_offset(surf, Rect(), Pos(x, y));
+            target.blit_offset(surf, blit_rect_zero(), blit_pos(x, y));
             x += glyphwidth;
          }
          y += glyphheight + newline_offset;
@@ -127,7 +127,7 @@ namespace Blit
       std::vector<OffsetFont>::const_iterator max_x = max_element(fonts.begin(), fonts.end(), func_x);
       std::vector<OffsetFont>::const_iterator max_y = max_element(fonts.begin(), fonts.end(), func_y);
 
-      return Pos(max_x->glyph_size().x, max_y->glyph_size().y);
+      return blit_pos(max_x->glyph_size().x, max_y->glyph_size().y);
    }
 
    void FontCluster::render_msg(RenderTarget& target, const string& msg,

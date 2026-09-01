@@ -153,15 +153,15 @@ namespace Blit
       int index = 0;
       for (auto& gid_str : walk)
       {
-         Pos pos = Pos(index % width, index / width);
+         Pos pos = blit_pos(index % width, index / width);
 
          unsigned gid = Utils::stoi(gid_str);
          if (gid)
          {
             Blit::Surface surf = tiles[gid];
-            surf.rect().pos = pos * Pos(tilewidth, tileheight);
+            surf.rect().pos = pos * blit_pos(tilewidth, tileheight);
 
-            layer.cluster.vec().push_back({surf, Pos()});
+            layer.cluster.vec().push_back({surf, blit_pos_zero()});
 
             if (Utils::find_or_default(surf.attr(), "collision", "") == "true")
                collisions.insert(pos);

@@ -19,8 +19,9 @@ namespace Icy
    }
 
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font)
-      : map(level_path), target(fb_width, fb_height), font(&font),
-         camera(target, player.rect(), Pos(map.pix_width(), map.pix_height())),
+      : map(level_path), target(fb_width, fb_height),
+         player_off(blit_pos_zero()), font(&font),
+         camera(target, player.rect(), blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
@@ -31,8 +32,9 @@ namespace Icy
    }
 
    Game::Game(const string& level_path)
-      : map(level_path), target(fb_width, fb_height), font(NULL),
-         camera(target, player.rect(), Pos(map.pix_width(), map.pix_height())),
+      : map(level_path), target(fb_width, fb_height),
+         player_off(blit_pos_zero()), font(NULL),
+         camera(target, player.rect(), blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), push(true)
    {
@@ -64,8 +66,8 @@ namespace Icy
       int off_y = Utils::stoi(Utils::find_or_default(layer->attr, "player_offset_y", "0"));
       std::basic_string<char> face = Utils::find_or_default(layer->attr, "start_facing", "right");
 
-      player.rect().pos = Pos(x * map.tile_width(), y * map.tile_height());
-      player_off = Pos(off_x, off_y);
+      player.rect().pos = blit_pos(x * map.tile_width(), y * map.tile_height());
+      player_off = blit_pos(off_x, off_y);
       facing = string_to_input(face);
       player.active_alt(face);
    }
@@ -75,14 +77,14 @@ namespace Icy
       update_player();
 
       if (bg)
-         target.blit(*bg, Rect());
+         target.blit(*bg, blit_rect_zero());
       else
          target.clear(blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 
       camera.update();
 
       map.render(target);
-      target.blit_offset(player, Rect(), player_off);
+      target.blit_offset(player, blit_rect_zero(), player_off);
 
       if (font)
       {
@@ -289,11 +291,11 @@ namespace Icy
    {
       switch (input)
       {
-         case Input::Up:    return Pos(0, -1);
-         case Input::Left:  return Pos(-1, 0);
-         case Input::Right: return Pos(1, 0);
-         case Input::Down:  return Pos(0, 1);
-         default:           return Pos();
+         case Input::Up:    return blit_pos(0, -1);
+         case Input::Left:  return blit_pos(-1, 0);
+         case Input::Right: return blit_pos(1, 0);
+         case Input::Down:  return blit_pos(0, 1);
+         default:           return blit_pos_zero();
       }
    }
 
@@ -331,7 +333,7 @@ namespace Icy
 
       for (int y = min_tile_y; y <= max_tile_y; y++)
          for (int x = min_tile_x; x <= max_tile_x; x++)
-            if (Pos(x, y) != Pos(current_x, current_y) && map.collision(Pos(x, y))) // Can't collide against ourselves.
+            if (blit_pos(x, y) != blit_pos(current_x, current_y) && map.collision(blit_pos(x, y))) // Can't collide against ourselves.
                return true;
 
       return false;
@@ -340,7 +342,7 @@ namespace Icy
    void Game::push_block()
    {
       Blit::Pos offset = input_to_offset(facing);
-      Blit::Pos dir    = offset * Pos(map.tile_width(), map.tile_height());
+      Blit::Pos dir    = offset * blit_pos(map.tile_width(), map.tile_height());
       Blit::Surface *tile   = map.find_tile("blocks", player.rect().pos + dir);
 
       if (!tile)
@@ -348,7 +350,7 @@ namespace Icy
 
       int tile_x = player.rect().pos.x / map.tile_width();
       int tile_y = player.rect().pos.y / map.tile_height();
-      Pos tile_pos(tile_x, tile_y);
+      Pos tile_pos = blit_pos(tile_x, tile_y);
 
       if (!map.collision(tile_pos + (2 * offset)))
       {
@@ -455,13 +457,13 @@ namespace Icy
    {
       // Map can fit completely inside our rect, just center it.
       if (target->width() >= map_size.x && target->height() >= map_size.y)
-         target->camera_set((map_size - Pos(target->width(), target->height())) / 2);
+         target->camera_set((map_size - blit_pos(target->width(), target->height())) / 2);
       else // Center around player, but clamp if player isn't near walls.
       {
          Blit::Pos pos = rect->pos;
-         pos += Pos(rect->w, rect->h) / 2;
+         pos += blit_pos(rect->w, rect->h) / 2;
 
-         Pos target_size(target->width(), target->height());
+         Pos target_size = blit_pos(target->width(), target->height());
 
          Blit::Pos pos_base = pos - target_size / 2;
          Blit::Pos pos_max  = pos_base + target_size;

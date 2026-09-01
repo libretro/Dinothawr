@@ -13,7 +13,7 @@ namespace Blit
          Font(const std::string& font);
 
          const Surface& surface(char c) const; 
-         Pos glyph_size() const { return Pos(glyphwidth, glyphheight); }
+         Pos glyph_size() const { return blit_pos(glyphwidth, glyphheight); }
 
          enum RenderAlignment
          {
@@ -50,7 +50,7 @@ namespace Blit
       private:
          struct OffsetFont : public Font
          {
-            OffsetFont()
+            OffsetFont() : offset(blit_pos_zero())
             {
             }
             OffsetFont(const std::string& font);

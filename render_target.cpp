@@ -5,7 +5,7 @@
 namespace Blit
 {
    RenderTarget::RenderTarget(int width, int height)
-      : m_buffer(width * height), rect(Pos(0, 0), width, height)
+      : m_buffer(width * height), rect(blit_rect(blit_pos_zero(), width, height))
    {}
 
    const Pixel* RenderTarget::buffer() const
@@ -21,7 +21,7 @@ namespace Blit
    Surface RenderTarget::convert_surface()
    {
       int width = rect.w, height = rect.h;
-      rect = Rect();
+      rect = blit_rect_zero();
 
       return Surface(std::make_shared<Surface::Data>(std::move(m_buffer), width, height));
    }
@@ -53,7 +53,7 @@ namespace Blit
 
    void RenderTarget::blit(const Surface& surf, Rect subrect)
    {
-      blit_offset(surf, subrect, Pos(0, 0));
+      blit_offset(surf, subrect, blit_pos(0, 0));
    }
 
    void RenderTarget::blit_offset(const Surface& surf_, Rect subrect, Pos pos)
@@ -66,25 +66,27 @@ namespace Blit
 
       bool ignore_camera = surf.ignore_camera();
       if (ignore_camera)
-         dest_rect.pos = Pos(0, 0);
+         dest_rect.pos = blit_pos_zero();
 
-      Rect blit_rect = surf_rect & dest_rect;
+      /* 'clip' rather than 'blit_rect': that is the name of the C
+       * constructor now. */
+      Rect clip = surf_rect & dest_rect;
 
-      if (subrect)
+      if (blit_rect_valid(subrect))
       {
          subrect += surf.rect().pos;
-         blit_rect &= subrect;
+         clip &= subrect;
       }
 
-      if (!blit_rect)
+      if (!blit_rect_valid(clip))
          return;
 
-      const Pixel* src_data = surf.pixel_raw(blit_rect.pos);
+      const Pixel* src_data = surf.pixel_raw(clip.pos);
       Pixel* dst_data = ignore_camera ?
-         pixel_raw_no_offset(blit_rect.pos) : pixel_raw(blit_rect.pos);
+         pixel_raw_no_offset(clip.pos) : pixel_raw(clip.pos);
 
-      for (int y = 0; y < blit_rect.h; y++, src_data += surf_rect.w, dst_data += rect.w)
-         blit_pixel_set_line_if_alpha(dst_data, src_data, blit_rect.w);
+      for (int y = 0; y < clip.h; y++, src_data += surf_rect.w, dst_data += rect.w)
+         blit_pixel_set_line_if_alpha(dst_data, src_data, clip.w);
    }
 
    Pixel* RenderTarget::pixel_raw_no_offset(Pos pos)

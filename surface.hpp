@@ -70,6 +70,10 @@ namespace Blit
    class Renderable
    {
       public:
+         /* Pos is a C aggregate with no constructor, so members of this
+          * type have to be given their zero explicitly. */
+         Renderable() : position(blit_pos_zero()) {}
+
          /* Polymorphic base: Level and SurfaceCluster derive from it and are
           * held in containers that destroy through this type. */
          virtual ~Renderable() {}
@@ -159,7 +163,7 @@ namespace Blit
    class RenderTarget
    {
       public:
-         RenderTarget()
+         RenderTarget() : rect(blit_rect_zero())
          {
          }
 

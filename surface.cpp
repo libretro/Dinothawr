@@ -9,17 +9,19 @@ namespace Blit
 {
    Surface::Surface(Pixel pix, int width, int height)
       : data(make_shared<Data>(pix, width, height)),
-      m_active_alt_index(0), m_rect(Pos(0, 0), width, height), m_ignore_camera(false)
+      m_active_alt_index(0),
+      m_rect(blit_rect(blit_pos_zero(), width, height)), m_ignore_camera(false)
    {}
 
    Surface::Surface(shared_ptr<const Data> data)
-      : data(data), m_active_alt_index(0), m_rect(Pos(0, 0), data->w, data->h), m_ignore_camera(false)
+      : data(data), m_active_alt_index(0),
+      m_rect(blit_rect(blit_pos_zero(), data->w, data->h)), m_ignore_camera(false)
    {}
 
    static bool same_size_func(const vector<Surface::Alt>& alts, Pos size)
    {
       for( vector<Surface::Alt>::const_iterator alt = alts.begin(); alt!=alts.end(); alt++ )
-         if(size != Pos(alt->data->w, alt->data->h))
+         if(size != blit_pos(alt->data->w, alt->data->h))
             return false;
       return true;
    }
@@ -29,8 +31,8 @@ namespace Blit
       if (alts.empty())
          throw logic_error("Alts is empty.");
 
-      Pos size(alts.front().data->w, alts.front().data->h);
-      m_rect = Rect(Pos(0, 0), size.x, size.y);
+      Pos size = blit_pos(alts.front().data->w, alts.front().data->h);
+      m_rect = blit_rect(blit_pos_zero(), size.x, size.y);
 
       bool same_size = same_size_func(alts,size);
 
@@ -72,7 +74,7 @@ namespace Blit
    }
 
    Surface::Surface()
-      : m_rect(Pos(0, 0), 0, 0), m_ignore_camera(false)
+      : m_rect(blit_rect_zero()), m_ignore_camera(false)
    {}
 
    Surface Surface::sub(Rect rect) const
