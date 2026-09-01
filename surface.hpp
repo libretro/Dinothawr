@@ -5,8 +5,10 @@
 #include "blit_surface_data.h"
 #include "blit_attr_table.h"
 #include "blit_alt_table.h"
+#include "blit_surface.h"
 
 #include <memory>
+#include <new>
 #include <vector>
 #include <map>
 #include <functional>
@@ -14,11 +16,14 @@
 
 namespace Blit
 {
+   /* A value-semantics shim over blit_surface_t. It holds one and does
+    * the retain and release the C struct expects around copies, so the
+    * engine code that is still C++ can keep putting Surfaces in
+    * std::map and std::vector. Everything it does is a forward to
+    * blit_surface.h; when the containers go, so does this. */
    class Surface
    {
       public:
-         /* The pixels are blit_surface_data_t now; Data stays as the
-          * name the rest of the engine spells it. */
          typedef blit_surface_data_t Data;
 
          /* Borrowed: the session cache owns a reference to every face
@@ -30,144 +35,103 @@ namespace Blit
             std::string tag;
          };
 
-         Surface();
-         Surface(Pixel pix, int width, int height);
+         Surface() { blit_surface_init(&s); }
+
+         Surface(Pixel pix, int width, int height)
+         {
+            if (!blit_surface_init_filled(&s, pix, width, height))
+               throw std::bad_alloc();
+         }
+
          /* Takes its own reference; the caller keeps theirs. */
-         Surface(Data *data);
+         Surface(Data *data) { blit_surface_init_data(&s, data); }
+
          Surface(const std::vector<Alt>& alts, const std::string& start_id);
 
-         /* Explicit rule of three: the references are counted by hand
-          * now rather than by shared_ptr. Defined here rather than in
-          * the .cpp so they still inline into the blit path, which
-          * copies a Surface per call. */
-         Surface(const Surface& other)
-            : data(other.data), alts(other.alts),
-            m_active_alt(other.m_active_alt),
-            m_active_alt_index(other.m_active_alt_index),
-            attribs(other.attribs), m_rect(other.m_rect),
-            m_ignore_camera(other.m_ignore_camera)
-         {
-            retain_all();
-         }
+         Surface(const Surface& other) : s(other.s)
+         { blit_surface_retain(&s); }
 
          Surface& operator=(const Surface& other)
          {
             if (this != &other)
             {
                /* Retain before release: an assignment from a Surface
-                * sharing our data would otherwise free it first. */
-               other.retain_all();
-               release_all();
-
-               data               = other.data;
-               alts               = other.alts;
-               m_active_alt       = other.m_active_alt;
-               m_active_alt_index = other.m_active_alt_index;
-               attribs            = other.attribs;
-               m_rect             = other.m_rect;
-               m_ignore_camera    = other.m_ignore_camera;
+                * sharing our tables would otherwise free them first. */
+               blit_surface_retain(&other.s);
+               blit_surface_release(&s);
+               s = other.s;
             }
             return *this;
          }
 
          /* Declaring the copy operations suppresses the implicit move
           * ones, and this type is moved a lot: SurfaceCluster keeps its
-          * elements in a vector it sorts every frame. Without these,
-          * that sort copies - refcount traffic on every swap, and the
-          * strings and maps duplicated rather than stolen. */
-         Surface(Surface&& other)
-            : data(other.data), alts(other.alts),
-            m_active_alt(other.m_active_alt),
-            m_active_alt_index(other.m_active_alt_index),
-            attribs(other.attribs), m_rect(other.m_rect),
-            m_ignore_camera(other.m_ignore_camera)
-         {
-            /* References move with the members; the source keeps none. */
-            other.data    = NULL;
-            other.attribs = NULL;
-            other.alts    = NULL;
-         }
+          * elements in a vector it sorts every frame. */
+         Surface(Surface&& other) : s(other.s)
+         { blit_surface_init(&other.s); }
 
          Surface& operator=(Surface&& other)
          {
             if (this != &other)
             {
-               release_all();
-
-               data               = other.data;
-               alts               = other.alts;
-               m_active_alt       = other.m_active_alt;
-               m_active_alt_index = other.m_active_alt_index;
-               attribs            = other.attribs;
-               m_rect             = other.m_rect;
-               m_ignore_camera    = other.m_ignore_camera;
-
-               other.data    = NULL;
-               other.attribs = NULL;
-               other.alts    = NULL;
+               blit_surface_release(&s);
+               s = other.s;
+               blit_surface_init(&other.s);
             }
             return *this;
          }
 
-         ~Surface() { release_all(); }
+         ~Surface() { blit_surface_release(&s); }
 
          Surface sub(Rect rect) const;
-         void refill_color(Pixel pix);
+         void refill_color(Pixel pix)
+         {
+            if (!blit_surface_refill_color(&s, pix))
+               throw std::bad_alloc();
+         }
 
-         Rect& rect() { return m_rect; }
-         const Rect& rect() const { return m_rect; }
+         Rect& rect() { return s.rect; }
+         const Rect& rect() const { return s.rect; }
 
-         void ignore_camera(bool ignore);
-         bool ignore_camera() const;
+         void ignore_camera(bool ignore) { s.ignore_camera = ignore; }
+         bool ignore_camera() const { return s.ignore_camera != 0; }
 
-         Pixel pixel(Pos pos) const;
-         const Pixel* pixel_raw(Pos pos) const;
+         Pixel pixel(Pos pos) const { return blit_surface_pixel(&s, pos); }
+
+         const Pixel* pixel_raw(Pos pos) const
+         {
+            const Pixel *pixel = blit_surface_pixel_raw(&s, pos);
+            if (!pixel)
+               pixel_raw_out_of_bounds(pos);
+            return pixel;
+         }
 
          void active_alt(const std::string& id, unsigned index = 0);
-         void active_alt_index(unsigned index);
+         void active_alt_index(unsigned index)
+         { active_alt(s.active_alt ? s.active_alt : "", index); }
 
          /* The value for @key, or NULL when the tile has no such
           * attribute. */
          const char *attr(const char *key) const
-         { return blit_attr_table_find(attribs, key); }
+         { return blit_attr_table_find(s.attribs, key); }
 
          /* Copy-on-write: a shared table is cloned before the write, so
           * one tile's attributes never reach another's view. */
-         void set_attr(const char *key, const char *value);
+         void set_attr(const char *key, const char *value)
+         {
+            if (!blit_surface_set_attr(&s, key, value))
+               throw std::bad_alloc();
+         }
 
-         const blit_attr_table_t *attr_table() const { return attribs; }
+         const blit_attr_table_t *attr_table() const { return s.attribs; }
+
+         const blit_surface_t& raw() const { return s; }
 
       private:
-         /* One reference each: the active face's pixels, the face table
-          * and the attribute table. Three counters, no containers. */
-         Data *data;
+         /* Always throws; never returns. */
+         void pixel_raw_out_of_bounds(Pos pos) const;
 
-         blit_alt_table_t *alts;
-
-         void retain_all() const
-         {
-            blit_surface_data_ref(data);
-            blit_alt_table_ref(alts);
-            blit_attr_table_ref(attribs);
-         }
-
-         void release_all()
-         {
-            blit_alt_table_unref(alts);
-            blit_attr_table_unref(attribs);
-            blit_surface_data_unref(data);
-         }
-         /* Points into the face table, which this Surface holds a
-          * reference to, so it stays valid without owning a string. */
-         const char *m_active_alt;
-         unsigned m_active_alt_index;
-
-         /* Shared and reference counted, NULL meaning empty - see
-          * blit_attr_table.h. This is what keeps the per-blit Surface
-          * copy cheap. */
-         blit_attr_table_t *attribs;
-         Rect m_rect;
-         bool m_ignore_camera;
+         blit_surface_t s;
    };
 
    class RenderTarget;
