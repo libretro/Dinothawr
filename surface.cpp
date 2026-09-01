@@ -113,7 +113,7 @@ namespace Blit
    static Pixel* pixel_ptr = NULL;
    static Pixel transform_func(Pixel old)
    {
-      return old & static_cast<Pixel>(Pixel::alpha_mask) ? *pixel_ptr : Pixel();
+      return (old & BLIT_PIXEL_ALPHA_MASK) ? *pixel_ptr : (Pixel)0;
    }
 
    void Surface::refill_color(Pixel pixel)

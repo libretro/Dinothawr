@@ -77,7 +77,7 @@ namespace Icy
       if (bg)
          target.blit(*bg, Rect());
       else
-         target.clear(Pixel::ARGB(0x00, 0x00, 0x00, 0x00));
+         target.clear(blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 
       camera.update();
 

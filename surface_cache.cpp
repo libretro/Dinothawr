@@ -95,7 +95,7 @@ namespace Blit
          std::vector<Pixel> pix(width * height);
          for (unsigned i = 0; i < width * height; i++)
          {
-            pix[i] = Pixel::ARGB(
+            pix[i] = blit_pixel_argb(
                   uint8_t(frames[f][i] >> 24),
                   uint8_t(frames[f][i] >> 16),
                   uint8_t(frames[f][i] >>  8),
@@ -128,7 +128,7 @@ namespace Blit
       std::vector<Pixel> pix(width * height);
       for (unsigned i = 0; i < width * height; i++)
       {
-         pix[i] = Pixel::ARGB(
+         pix[i] = blit_pixel_argb(
                uint8_t(image[i] >> 24),
                uint8_t(image[i] >> 16),
                uint8_t(image[i] >>  8),

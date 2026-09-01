@@ -2,6 +2,7 @@
 #define BLIT_HPP__
 
 #include "utils.hpp"
+#include "blit_pixel.h"
 #include <algorithm>
 #include <stdint.h>
 #include <vector>
@@ -14,124 +15,9 @@
 
 namespace Blit
 {
-   template <typename T,
-            unsigned alpha_bits, unsigned alpha_shift,
-            unsigned red_bits,   unsigned red_shift,
-            unsigned green_bits, unsigned green_shift,
-            unsigned blue_bits,  unsigned blue_shift>
-   struct PixelBase
-   {
-      typedef PixelBase<T,
-         alpha_bits, alpha_shift,
-         red_bits,   red_shift,
-         green_bits, green_shift,
-         blue_bits,  blue_shift> self_type;
-
-      typedef T type;
-      static const T alpha_mask = ((1u << alpha_bits) - 1) << alpha_shift;
-      static const T rgb_mask =
-         ((1u << red_bits)   - 1) << red_shift   |
-         ((1u << green_bits) - 1) << green_shift |
-         ((1u << blue_bits)  - 1) << blue_shift;
-
-      PixelBase(T pixel) : pixel(pixel) {}
-      PixelBase() : pixel(0) {}
-
-      operator bool() const { return pixel; }
-
-      self_type operator|(self_type pix) const
-      {
-         return PixelBase(pixel | pix.pixel);
-      }
-
-      self_type operator&(self_type pix) const
-      {
-         return PixelBase(pixel & pix.pixel);
-      }
-
-      self_type& operator|=(self_type pix)
-      {
-         pixel |= pix.pixel;
-         return *this;
-      }
-
-      self_type& operator&=(self_type pix)
-      {
-         pixel &= pix.pixel;
-         return *this;
-      }
-
-      self_type& set_if_alpha(self_type pix)
-      {
-         if (pix.pixel & alpha_mask)
-            pixel = pix.pixel;
-
-         return *this;
-      }
-
-      static self_type ARGB(unsigned a, unsigned r, unsigned g, unsigned b)
-      {
-         r >>= 8 - red_bits;
-         g >>= 8 - green_bits;
-         b >>= 8 - blue_bits;
-
-         r <<= red_shift;
-         g <<= green_shift;
-         b <<= blue_shift;
-
-         a >>= 8 - alpha_bits;
-         a <<= alpha_shift;
-
-         return a | r | g | b;
-      }
-
-      static void set_line_if_alpha(self_type* dst, const self_type* src, unsigned pix)
-      {
-         for (unsigned x = 0; x < pix; x++)
-            dst[x].set_if_alpha(src[x]);
-      }
-
-      static self_type mask_rgb_function(self_type pix)
-      {
-         return pix & static_cast<self_type>(rgb_mask);
-      }
-
-      static void mask_rgb(self_type *dst, std::size_t size)
-      {
-         std::transform(dst, dst + size, dst, mask_rgb_function);
-      }
-
-      template <T shift, T bits>
-      T extract_color() const
-      {
-         return (pixel >> shift) & ((1 << bits) - 1);
-      }
-
-      static self_type blend(self_type a, self_type b)
-      {
-         T a_r = a.extract_color<red_shift, red_bits>();
-         T a_g = a.extract_color<green_shift, green_bits>();
-         T a_b = a.extract_color<blue_shift, blue_bits>();
-         T b_r = b.extract_color<red_shift, red_bits>();
-         T b_g = b.extract_color<green_shift, green_bits>();
-         T b_b = b.extract_color<blue_shift, blue_bits>();
-
-         T res_r = (a_r + b_r + 1) >> 1;
-         T res_g = (a_g + b_g + 1) >> 1;
-         T res_b = (a_b + b_b + 1) >> 1;
-
-         return (res_r << red_shift) | (res_g << green_shift) | (res_b << blue_shift);
-      }
-
-      T pixel;
-   };
-
-   typedef PixelBase<uint32_t,
-           8, 24, // A
-           8, 16, // R
-           8,  8, // G
-           8,  0> // B
-      Pixel;
+   /* The pixel format and its operations live in blit_pixel.h as plain
+    * C. Pixel stays as the name the engine uses for it. */
+   typedef blit_pixel_t Pixel;
 
    struct Pos
    {

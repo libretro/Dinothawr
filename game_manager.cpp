@@ -34,12 +34,12 @@ namespace Icy
       Blit::Xml::Node game_node = doc.child("game");
 
       string font_path = Utils::join(dir, "/", game_node.child("font").attribute("source").value());
-      font.add_font(font_path, Pos(-1, 1), Pixel::ARGB(0xff, 0xc0, 0x98, 0x00), "yellow");
-      font.add_font(font_path, Pos( 0, 0), Pixel::ARGB(0xff, 0xff, 0xde, 0x00), "yellow");
-      font.add_font(font_path, Pos(-1, 1), Pixel::ARGB(0xff, 0x73, 0x73, 0x8b), "white");
-      font.add_font(font_path, Pos( 0, 0), Pixel::ARGB(0xff, 0xff, 0xff, 0xff), "white");
-      font.add_font(font_path, Pos(-1, 1), Pixel::ARGB(0xff, 0x39, 0x5a, 0x94), "lime");
-      font.add_font(font_path, Pos( 0, 0), Pixel::ARGB(0xff, 0xb8, 0xe8, 0xb0), "lime");
+      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00), "yellow");
+      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00), "yellow");
+      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b), "white");
+      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff), "white");
+      font.add_font(font_path, Pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94), "lime");
+      font.add_font(font_path, Pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0), "lime");
 
       init_menu(game_node.child("title").attribute("source").value());
       init_menu_sprite(game_node);
@@ -566,13 +566,14 @@ namespace Icy
          {
             for (unsigned x = 0; x < width; x += scale_factor)
             {
-               Blit::PixelBase<unsigned int, 8u, 24u, 8u, 16u, 8u, 8u, 8u, 0u> a0 = pix[pitch * (y + 0) + (x + 0)];
-               Blit::PixelBase<unsigned int, 8u, 24u, 8u, 16u, 8u, 8u, 8u, 0u> a1 = pix[pitch * (y + 0) + (x + 1)];
-               Blit::PixelBase<unsigned int, 8u, 24u, 8u, 16u, 8u, 8u, 8u, 0u> b0 = pix[pitch * (y + 1) + (x + 0)];
-               Blit::PixelBase<unsigned int, 8u, 24u, 8u, 16u, 8u, 8u, 8u, 0u> b1 = pix[pitch * (y + 1) + (x + 1)];
-               Blit::PixelBase<unsigned int, 8u, 24u, 8u, 16u, 8u, 8u, 8u, 0u> res = Pixel::blend(Pixel::blend(a0, a1), Pixel::blend(b0, b1));
+               Pixel a0 = pix[pitch * (y + 0) + (x + 0)];
+               Pixel a1 = pix[pitch * (y + 0) + (x + 1)];
+               Pixel b0 = pix[pitch * (y + 1) + (x + 0)];
+               Pixel b1 = pix[pitch * (y + 1) + (x + 1)];
+               Pixel res = blit_pixel_blend(blit_pixel_blend(a0, a1),
+                     blit_pixel_blend(b0, b1));
 
-               data[preview_width * (y / scale_factor) + (x / scale_factor)] = res | static_cast<Pixel>(Pixel::alpha_mask);
+               data[preview_width * (y / scale_factor) + (x / scale_factor)] = res | BLIT_PIXEL_ALPHA_MASK;
             }
          }
       });
