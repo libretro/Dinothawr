@@ -85,8 +85,21 @@ namespace Blit
       Pixel* dst_data = ignore_camera ?
          pixel_raw_no_offset(clip.pos) : pixel_raw(clip.pos);
 
-      for (int y = 0; y < clip.h; y++, src_data += surf_rect.w, dst_data += rect.w)
-         blit_pixel_set_line_if_alpha(dst_data, src_data, clip.w);
+      /* Strides in locals, not re-read from the members each row. The
+       * blit stores through a blit_pixel_t*, which is unsigned int and
+       * so may alias the int members it would otherwise be reloading;
+       * the compiler could hoist them when the store went through a
+       * distinct struct type, and cannot now. */
+      {
+         const int    src_stride = surf_rect.w;
+         const int    dst_stride = rect.w;
+         const size_t run        = (size_t)clip.w;
+         int y;
+
+         for (y = 0; y < clip.h; y++,
+               src_data += src_stride, dst_data += dst_stride)
+            blit_pixel_set_line_if_alpha(dst_data, src_data, run);
+      }
    }
 
    Pixel* RenderTarget::pixel_raw_no_offset(Pos pos)
