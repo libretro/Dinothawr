@@ -41,16 +41,30 @@ namespace Icy
       /* Reset the int16 path: drain any decode still in flight from a
        * previous game (discarding its buffer) and clear the music slot.
        * The float path resets via its own mixer reassignment. */
-      if (!audio_is_float())
+      deinit();
+   }
+
+   /* A decode in flight owns an i16_buf_t that only the future can hand
+    * over: std::future's destructor releases the shared state and knows
+    * nothing about the raw pointer inside it, so the buffer has to be
+    * collected here or it is lost.  get() waits for the decode to
+    * finish, which is bounded by one track and is what a reset already
+    * does. */
+   void BGManager::deinit()
+   {
+      if (audio_is_float())
+         return;
+
+      if (i16_future.valid())
       {
-         if (i16_future.valid())
-         {
-            i16_buf_t *buf = i16_future.get();
-            if (buf)
-               i16_buf_unref(buf);
-         }
-         mixer_i16_set_music(get_mixer_i16(), NULL);
+         i16_buf_t *buf = i16_future.get();
+         if (buf)
+            i16_buf_unref(buf);
       }
+
+      mixer_i16_t *m = get_mixer_i16();
+      if (m)
+         mixer_i16_set_music(m, NULL);
    }
 
    /* xorshift32: enough for picking one of a handful of tracks, and it

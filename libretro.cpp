@@ -500,6 +500,12 @@ bool retro_load_game_special(unsigned, const struct retro_game_info*, size_t)
 void retro_unload_game(void)
 {
    game.reset();
+
+   /* Before the mixer goes away: the music slot points into it, and a
+    * decode may still be in flight holding a buffer nothing else can
+    * reach. */
+   get_bg().deinit();
+
    if (mixer_i16)
    {
       mixer_i16_free(mixer_i16);
