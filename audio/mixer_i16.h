@@ -10,11 +10,9 @@
  * no C99/C11 features, no VLAs, no designated initialisers. The header is
  * C++-includable via the extern "C" guard.
  *
- * Threading: the mixer does no locking of its own. Callers that add or
- * clear streams from a thread other than the one calling
- * mixer_i16_render() must serialise those calls themselves (the existing
- * Mixer C++ wrapper already holds a recursive_mutex across add/clear/
- * render, so that contract is preserved when this is slotted in behind it).
+ * Threading: the mixer does no locking. Audio is rendered from retro_run
+ * on the same thread that adds and clears streams, and the decode jobs
+ * only ever hand back a finished buffer for that thread to install.
  */
 
 #ifndef MIXER_I16_H__
@@ -114,16 +112,6 @@ void mixer_i16_set_master_q15(mixer_i16_t *mixer, int32_t q15);
  * enabled. Defaults to disabled until the audio callback turns it on. */
 void mixer_i16_set_enabled(mixer_i16_t *mixer, int enabled);
 int  mixer_i16_enabled(const mixer_i16_t *mixer);
-
-/* Optional serialisation hooks. When the libretro audio callback runs on
- * its own thread, the main thread may add SFX / swap the music track
- * while the audio thread is rendering. Set these (e.g. backed by a mutex)
- * so the mixer guards stream mutation and render against each other, the
- * same way the float mixer does internally. NULL hooks mean no locking
- * (single-threaded use). */
-typedef void (*i16_lock_fn)(void *data);
-void mixer_i16_set_lock(mixer_i16_t *mixer, i16_lock_fn lock,
-      i16_lock_fn unlock, void *data);
 
 /* Render 'frames' interleaved stereo int16 frames into 'out'. Dead
  * streams are purged first; remaining streams are summed with their

@@ -226,9 +226,6 @@ struct mixer_i16
    int32_t        master_q15;
    int            enabled;
 
-   i16_lock_fn    lock;       /* optional serialisation hooks */
-   i16_lock_fn    unlock;
-   void          *lock_data;
 };
 
 mixer_i16_t *mixer_i16_new(void)
@@ -247,34 +244,7 @@ mixer_i16_t *mixer_i16_new(void)
    mixer->scratch_frames = 0;
    mixer->master_q15     = MIXER_I16_UNITY_Q15;
    mixer->enabled        = 0;
-   mixer->lock           = NULL;
-   mixer->unlock         = NULL;
-   mixer->lock_data      = NULL;
    return mixer;
-}
-
-void mixer_i16_set_lock(mixer_i16_t *mixer, i16_lock_fn lock,
-      i16_lock_fn unlock, void *data)
-{
-   if (!mixer)
-      return;
-   mixer->lock      = lock;
-   mixer->unlock    = unlock;
-   mixer->lock_data = data;
-}
-
-/* Internal serialisation. No-ops unless hooks were installed. Public
- * entry points never call one another, so no recursion is required. */
-static INLINE void mix_lock(const mixer_i16_t *mixer)
-{
-   if (mixer->lock)
-      mixer->lock(mixer->lock_data);
-}
-
-static INLINE void mix_unlock(const mixer_i16_t *mixer)
-{
-   if (mixer->unlock)
-      mixer->unlock(mixer->lock_data);
 }
 
 void mixer_i16_clear(mixer_i16_t *mixer)
@@ -284,7 +254,6 @@ void mixer_i16_clear(mixer_i16_t *mixer)
    if (!mixer)
       return;
 
-   mix_lock(mixer);
 
    for (i = 0; i < mixer->count; i++)
    {
@@ -298,7 +267,6 @@ void mixer_i16_clear(mixer_i16_t *mixer)
       mixer->music->destroy(mixer->music);
    mixer->music = NULL;
 
-   mix_unlock(mixer);
 }
 
 void mixer_i16_free(mixer_i16_t *mixer)
@@ -322,7 +290,6 @@ void mixer_i16_add(mixer_i16_t *mixer, i16_stream_t *stream)
    if (!mixer || !stream)
       return;
 
-   mix_lock(mixer);
 
    if (mixer->count == mixer->capacity)
    {
@@ -333,7 +300,6 @@ void mixer_i16_add(mixer_i16_t *mixer, i16_stream_t *stream)
       if (!grown)
       {
          /* Out of memory: drop the stream rather than leak it. */
-         mix_unlock(mixer);
          if (stream->destroy)
             stream->destroy(stream);
          return;
@@ -345,7 +311,6 @@ void mixer_i16_add(mixer_i16_t *mixer, i16_stream_t *stream)
 
    mixer->streams[mixer->count++] = stream;
 
-   mix_unlock(mixer);
 }
 
 void mixer_i16_set_master_q15(mixer_i16_t *mixer, int32_t q15)
@@ -366,11 +331,9 @@ void mixer_i16_set_music(mixer_i16_t *mixer, i16_stream_t *stream)
       return;
    }
 
-   mix_lock(mixer);
    if (mixer->music && mixer->music->destroy)
       mixer->music->destroy(mixer->music);
    mixer->music = stream;
-   mix_unlock(mixer);
 }
 
 int mixer_i16_music_active(const mixer_i16_t *mixer)
@@ -380,10 +343,8 @@ int mixer_i16_music_active(const mixer_i16_t *mixer)
    if (!mixer)
       return 0;
 
-   mix_lock(mixer);
    active = (mixer->music && mixer->music->valid)
       ? mixer->music->valid(mixer->music) : 0;
-   mix_unlock(mixer);
    return active;
 }
 
@@ -391,9 +352,7 @@ void mixer_i16_set_enabled(mixer_i16_t *mixer, int enabled)
 {
    if (!mixer)
       return;
-   mix_lock(mixer);
    mixer->enabled = enabled ? 1 : 0;
-   mix_unlock(mixer);
 }
 
 int mixer_i16_enabled(const mixer_i16_t *mixer)
@@ -401,9 +360,7 @@ int mixer_i16_enabled(const mixer_i16_t *mixer)
    int enabled;
    if (!mixer)
       return 0;
-   mix_lock(mixer);
    enabled = mixer->enabled;
-   mix_unlock(mixer);
    return enabled;
 }
 
@@ -499,7 +456,6 @@ void mixer_i16_render(mixer_i16_t *mixer, int16_t *out, size_t frames)
       return;
    }
 
-   mix_lock(mixer);
 
    mixer_i16_purge(mixer);
 
@@ -515,7 +471,6 @@ void mixer_i16_render(mixer_i16_t *mixer, int16_t *out, size_t frames)
    if (!mixer_i16_ensure_scratch(mixer, frames))
    {
       memset(out, 0, samples * sizeof(int16_t));
-      mix_unlock(mixer);
       return;
    }
 
@@ -538,5 +493,4 @@ void mixer_i16_render(mixer_i16_t *mixer, int16_t *out, size_t frames)
       out[i] = (int16_t)v;
    }
 
-   mix_unlock(mixer);
 }

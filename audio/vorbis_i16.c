@@ -91,8 +91,8 @@ int16_t *audio_i16_decode_file(const char *path, size_t *out_samples)
 
    /* One read of the whole stream when the length is known.  No more
     * blocking than the chunked loop below - that ran the file to
-    * completion without yielding either, and the caller runs this under
-    * std::async - but it sizes the buffer once instead of growing it by
+    * completion without yielding either, and the caller runs this on a
+    * decode job - but it sizes the buffer once instead of growing it by
     * doubling, which transiently holds both buffers at every move. */
    if (total_frames)
    {
