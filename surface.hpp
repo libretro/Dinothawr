@@ -8,6 +8,7 @@
 #include "blit_surface.h"
 #include "blit_render_target.h"
 #include "blit_surface_cluster.h"
+#include "blit_str_map.h"
 
 #include <memory>
 #include <new>
@@ -216,6 +217,7 @@ namespace Blit
    class SurfaceCache
    {
       public:
+         SurfaceCache();
          ~SurfaceCache();
 
          Surface from_image(const std::string& path);
@@ -227,19 +229,19 @@ namespace Blit
       private:
          /* Session-long, never evicted: one reference per entry, all
           * released in the destructor. */
-         std::map<std::string, Surface::Data*> cache;
+         blit_str_map_t *cache;
          /* from_sprite's XML parse, kept alongside the pixel cache: the
           * faces it names were already shared, but the .sprite document
           * behind them was re-read and re-parsed on every call - 50 times
           * each for dino.sprite and frozen.sprite over a session. */
          /* A parsed .sprite: its face table and the face it starts on.
-          * The cache owns one reference on the table. */
+          * The cache owns one reference on the table and the string. */
          struct SpriteDef
          {
             blit_alt_table_t *alts;
-            std::string start_id;
+            char             *start_id;
          };
-         std::map<std::string, SpriteDef> sprites;
+         blit_str_map_t *sprites;
          Surface::Data *load_image(const std::string& path);
          /* Face inside an APNG: decodes the whole animation on the first
           * request for any of its frames and fills one cache entry per

@@ -3,6 +3,7 @@
 #include "rpng_front.h"
 #include <stdexcept>
 #include <new>
+#include <cstring>
 #include <cstdlib>
 
 
@@ -16,12 +17,17 @@ namespace Blit
 
    Surface SurfaceCache::from_image(const std::string& path)
    {
-      Surface::Data *ptr = cache[path];
-      if (ptr)
-         return Surface(ptr);
+      Surface::Data *ptr = (Surface::Data*)blit_str_map_find(cache,
+            path.c_str());
 
-      cache[path] = load_image(path);
-      return Surface(cache[path]);
+      if (!ptr)
+      {
+         ptr = load_image(path);
+         if (!blit_str_map_set(cache, path.c_str(), ptr, NULL, NULL))
+            throw std::bad_alloc();
+      }
+
+      return Surface(ptr);
    }
 
    Surface SurfaceCache::from_animation(const std::string& path, unsigned frame)
@@ -29,24 +35,43 @@ namespace Blit
       return Surface(load_apng_frame(path, frame));
    }
 
-   /* The cache holds one reference per entry for the whole session. */
+   SurfaceCache::SurfaceCache()
+      : cache(blit_str_map_new()), sprites(blit_str_map_new())
+   {
+      if (!cache || !sprites)
+         throw std::bad_alloc();
+   }
+
+   /* The cache holds one reference per entry for the whole session; the
+    * map owns its keys but not its values, so the values are released
+    * here before it goes. */
    SurfaceCache::~SurfaceCache()
    {
-      std::map<std::string, Surface::Data*>::iterator it;
-      std::map<std::string, SpriteDef>::iterator sprite;
+      size_t i;
 
-      for (it = cache.begin(); it != cache.end(); ++it)
-         blit_surface_data_unref(it->second);
+      for (i = 0; i < blit_str_map_count(cache); i++)
+         blit_surface_data_unref(
+               (Surface::Data*)blit_str_map_value_at(cache, i));
 
-      for (sprite = sprites.begin(); sprite != sprites.end(); ++sprite)
-         blit_alt_table_unref(sprite->second.alts);
+      for (i = 0; i < blit_str_map_count(sprites); i++)
+      {
+         SpriteDef *def = (SpriteDef*)blit_str_map_value_at(sprites, i);
+         blit_alt_table_unref(def->alts);
+         free(def->start_id);
+         free(def);
+      }
+
+      blit_str_map_free(cache);
+      blit_str_map_free(sprites);
    }
 
    Surface SurfaceCache::from_sprite(const std::string& path)
    {
-      std::map<std::string, SpriteDef>::iterator cached = sprites.find(path);
-      if (cached != sprites.end())
-         return Surface(cached->second.alts, cached->second.start_id.c_str());
+      SpriteDef *cached = (SpriteDef*)blit_str_map_find(sprites,
+            path.c_str());
+
+      if (cached)
+         return Surface(cached->alts, cached->start_id);
 
 
       {
@@ -55,9 +80,12 @@ namespace Blit
             throw std::runtime_error(Utils::join("Failed to load XML sprite: ", path, "."));
 
          std::basic_string<char> basedir = Utils::basedir(path);
-         SpriteDef def;
+         SpriteDef *def = (SpriteDef*)calloc(1, sizeof(*def));
 
-         if (!(def.alts = blit_alt_table_new()))
+         if (!def)
+            throw std::bad_alloc();
+
+         if (!(def->alts = blit_alt_table_new()))
             throw std::bad_alloc();
 
          Blit::Xml::Node sprite = doc.child("sprite");
@@ -72,21 +100,25 @@ namespace Blit
                ptr = load_apng_frame(path, face.attribute("frame").as_int());
             else
             {
-               ptr = cache[path];
+               ptr = (Surface::Data*)blit_str_map_find(cache, path.c_str());
                if (!ptr)
                {
-                  cache[path] = load_image(path);
-                  ptr = cache[path];
+                  ptr = load_image(path);
+                  if (!blit_str_map_set(cache, path.c_str(), ptr, NULL, NULL))
+                     throw std::bad_alloc();
                }
             }
 
-            if (!blit_alt_table_add(def.alts, id, ptr))
+            if (!blit_alt_table_add(def->alts, id, ptr))
                throw std::bad_alloc();
          }
 
-         def.start_id = sprite.attribute("start_id").value();
-         sprites[path] = def;
-         return Surface(def.alts, def.start_id.c_str());
+         def->start_id = strdup(sprite.attribute("start_id").value());
+         if (!def->start_id
+               || !blit_str_map_set(sprites, path.c_str(), def, NULL, NULL))
+            throw std::bad_alloc();
+
+         return Surface(def->alts, def->start_id);
       }
    }
 
@@ -95,7 +127,8 @@ namespace Blit
    {
       std::basic_string<char> key = Utils::join(path, "#", frame);
 
-      Surface::Data *ptr = cache[key];
+      Surface::Data *ptr = (Surface::Data*)blit_str_map_find(cache,
+            key.c_str());
       if (ptr)
          return ptr;
 
@@ -124,12 +157,16 @@ namespace Blit
          }
 
          free(frames[f]);
-         cache[Utils::join(path, "#", f)] =
-            blit_surface_data_new(pix, width, height);
+         {
+            std::string frame_key = Utils::join(path, "#", f);
+            if (!blit_str_map_set(cache, frame_key.c_str(),
+                     blit_surface_data_new(pix, width, height), NULL, NULL))
+               throw std::bad_alloc();
+         }
       }
       free(frames);
 
-      ptr = cache[key];
+      ptr = (Surface::Data*)blit_str_map_find(cache, key.c_str());
       if (!ptr)
          throw std::runtime_error(Utils::join("APNG frame out of range: ",
                   path, "#", frame));
