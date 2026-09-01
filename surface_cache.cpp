@@ -16,17 +16,25 @@ namespace Blit
 
    Surface SurfaceCache::from_image(const std::string& path)
    {
-      std::shared_ptr<const Blit::Surface::Data> ptr = cache[path];
+      Surface::Data *ptr = cache[path];
       if (ptr)
          return Surface(ptr);
-      
+
       cache[path] = load_image(path);
-      return cache[path];
+      return Surface(cache[path]);
    }
 
    Surface SurfaceCache::from_animation(const std::string& path, unsigned frame)
    {
       return Surface(load_apng_frame(path, frame));
+   }
+
+   /* The cache holds one reference per entry for the whole session. */
+   SurfaceCache::~SurfaceCache()
+   {
+      std::map<std::string, Surface::Data*>::iterator it;
+      for (it = cache.begin(); it != cache.end(); ++it)
+         blit_surface_data_unref(it->second);
    }
 
    Surface SurfaceCache::from_sprite(const std::string& path)
@@ -50,7 +58,7 @@ namespace Blit
             const char *frame = face.attribute("frame").value();
             std::basic_string<char> path   = Utils::join(basedir, "/", face.attribute("source").value());
 
-            std::shared_ptr<const Blit::Surface::Data> ptr;
+            Surface::Data *ptr;
             if (*frame)
                ptr = load_apng_frame(path, face.attribute("frame").as_int());
             else
@@ -72,12 +80,12 @@ namespace Blit
       }
    }
 
-   std::shared_ptr<const Surface::Data> SurfaceCache::load_apng_frame(
+   Surface::Data *SurfaceCache::load_apng_frame(
          const std::string& path, unsigned frame)
    {
       std::basic_string<char> key = Utils::join(path, "#", frame);
 
-      std::shared_ptr<const Surface::Data> ptr = cache[key];
+      Surface::Data *ptr = cache[key];
       if (ptr)
          return ptr;
 
@@ -92,7 +100,10 @@ namespace Blit
 
       for (unsigned f = 0; f < num; f++)
       {
-         std::vector<Pixel> pix(width * height);
+         Pixel *pix = (Pixel*)malloc((size_t)width * height * sizeof(Pixel));
+         if (!pix)
+            throw std::bad_alloc();
+
          for (unsigned i = 0; i < width * height; i++)
          {
             pix[i] = blit_pixel_argb(
@@ -104,7 +115,7 @@ namespace Blit
 
          free(frames[f]);
          cache[Utils::join(path, "#", f)] =
-            std::make_shared<Surface::Data>(std::move(pix), width, height);
+            blit_surface_data_new(pix, width, height);
       }
       free(frames);
 
@@ -115,7 +126,7 @@ namespace Blit
       return ptr;
    }
 
-   std::shared_ptr<const Surface::Data> SurfaceCache::load_image(const std::string& path)
+   Surface::Data *SurfaceCache::load_image(const std::string& path)
    {
       uint32_t *image = NULL;
       unsigned width  = 0;
@@ -125,7 +136,13 @@ namespace Blit
       if (!loaded)
          throw std::runtime_error(Utils::join("RPNG failed to load image: ", path));
 
-      std::vector<Pixel> pix(width * height);
+      Pixel *pix = (Pixel*)malloc((size_t)width * height * sizeof(Pixel));
+      if (!pix)
+      {
+         free(image);
+         throw std::bad_alloc();
+      }
+
       for (unsigned i = 0; i < width * height; i++)
       {
          pix[i] = blit_pixel_argb(
@@ -136,7 +153,7 @@ namespace Blit
       }
 
       free(image);
-      return std::make_shared<Surface::Data>(std::move(pix), width, height);
+      return blit_surface_data_new(pix, width, height);
    }
 }
 

@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include <cstring>
 #include "utils.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -112,10 +113,10 @@ namespace Icy
       copy_if(layer->cluster.vec().begin(),
             layer->cluster.vec().end(),
             back_inserter(surfs), [&attr, &val](const SurfaceCluster::Elem& surf) -> bool {
+               const char *found = surf.surf.attr(attr.c_str());
                if (val.empty())
-                  return surf.surf.attr().find(attr) != surf.surf.attr().end();
-               else
-                  return Utils::find_or_default(surf.surf.attr(), attr, "") == val; 
+                  return found != NULL;
+               return found && val == found;
             });
 
       return surfs;
@@ -436,8 +437,9 @@ namespace Icy
 
       //cerr << "Player: " << player.rect().pos << " Surf: " << surf->rect().pos << endl; 
       Blit::Surface *surface  = map.find_tile("floor", surf.rect().pos);
-      bool slippery = surface && Utils::find_or_default(surface->attr(),
-            &surf == &player ? "slippery_player" : "slippery_block", "") == "true";
+      const char *slip = surface ? surface->attr(
+            &surf == &player ? "slippery_player" : "slippery_block") : NULL;
+      bool slippery = slip && std::strcmp(slip, "true") == 0;
 
       is_sliding = slippery;
       return slippery;

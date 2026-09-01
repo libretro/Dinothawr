@@ -1,4 +1,7 @@
 #include "game.hpp"
+#include <new>
+#include <cstring>
+#include <cstdlib>
 #include "xml.hpp"
 #include "utils.hpp"
 
@@ -560,6 +563,7 @@ namespace Icy
       int preview_height = Game::fb_height / scale_factor;
 
       vector<Pixel> data(preview_width * preview_height);
+      Pixel *owned;
 
       game.input_cb([](Input) { return false; });
       game.video_cb([&data, preview_width](const void* pix_data, unsigned width, unsigned height, size_t pitch) {
@@ -584,7 +588,22 @@ namespace Icy
 
       game.iterate();
 
-      preview = Surface(make_shared<Surface::Data>(std::move(data), preview_width, preview_height));
+      {
+         /* Surface takes its own reference; drop the one we made. */
+         Blit::Surface::Data *pdata;
+
+         owned = (Pixel*)malloc(data.size() * sizeof(Pixel));
+         if (!owned)
+            throw std::bad_alloc();
+         memcpy(owned, &data[0], data.size() * sizeof(Pixel));
+
+         pdata = blit_surface_data_new(owned, preview_width,
+               preview_height);
+         if (!pdata)
+            throw std::bad_alloc();
+         preview = Surface(pdata);
+         blit_surface_data_unref(pdata);
+      }
       pos(blit_pos(Game::fb_width, Game::fb_height) / scale_factor - blit_pos(5, 5));
    }
 

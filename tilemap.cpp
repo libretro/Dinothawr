@@ -101,7 +101,9 @@ namespace Blit
             tiles[id] = surface_cache().from_animation(path, id_cnt);
             if (tiles[id].rect().w != tilewidth || tiles[id].rect().h != tileheight)
                throw std::logic_error("Tilemap geometry does not correspond with image values.");
-            std::copy(global_attr.begin(), global_attr.end(), std::inserter(tiles[id].attr(), tiles[id].attr().begin()));
+            for (std::map<std::string, std::string>::const_iterator ga =
+                  global_attr.begin(); ga != global_attr.end(); ++ga)
+               tiles[id].set_attr(ga->first.c_str(), ga->second.c_str());
          }
       }
       else
@@ -117,7 +119,9 @@ namespace Blit
             {
                int id = first_gid + id_cnt;
                tiles[id] = surf.sub({{x, y}, tilewidth, tileheight});
-               std::copy(global_attr.begin(), global_attr.end(), std::inserter(tiles[id].attr(), tiles[id].attr().begin())); 
+               for (std::map<std::string, std::string>::const_iterator ga =
+                     global_attr.begin(); ga != global_attr.end(); ++ga)
+                  tiles[id].set_attr(ga->first.c_str(), ga->second.c_str());
             }
          }
       }
@@ -135,7 +139,9 @@ namespace Blit
          if (itr != attrs.end())
             tiles[id] = surface_cache().from_sprite(Utils::join(dir, "/", itr->second));
 
-         tiles[id].attr() = std::move(attrs);
+         for (std::map<std::string, std::string>::const_iterator a =
+               attrs.begin(); a != attrs.end(); ++a)
+            tiles[id].set_attr(a->first.c_str(), a->second.c_str());
       }
    }
 
@@ -163,8 +169,11 @@ namespace Blit
 
             layer.cluster.vec().push_back({surf, blit_pos_zero()});
 
-            if (Utils::find_or_default(surf.attr(), "collision", "") == "true")
-               collisions.insert(pos);
+            {
+               const char *coll = surf.attr("collision");
+               if (coll && std::strcmp(coll, "true") == 0)
+                  collisions.insert(pos);
+            }
          }
 
          index++;

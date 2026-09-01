@@ -1,4 +1,7 @@
 #include "surface.hpp"
+#include <new>
+#include <cstring>
+#include <cstdlib>
 #include <stdexcept>
 #include <utility>
 
@@ -21,9 +24,28 @@ namespace Blit
    Surface RenderTarget::convert_surface()
    {
       int width = rect.w, height = rect.h;
+      size_t count = m_buffer.size();
+      Pixel *pix;
+      Surface::Data *data;
+
       rect = blit_rect_zero();
 
-      return Surface(std::make_shared<Surface::Data>(std::move(m_buffer), width, height));
+      pix = (Pixel*)malloc((count ? count : 1) * sizeof(Pixel));
+      if (!pix)
+         throw std::bad_alloc();
+      if (count)
+         memcpy(pix, &m_buffer[0], count * sizeof(Pixel));
+      m_buffer.clear();
+
+      if (!(data = blit_surface_data_new(pix, width, height)))
+         throw std::bad_alloc();
+
+      {
+         /* Surface takes its own reference. */
+         Surface out(data);
+         blit_surface_data_unref(data);
+         return out;
+      }
    }
 
    int RenderTarget::width() const
@@ -58,10 +80,9 @@ namespace Blit
 
    void RenderTarget::blit_offset(const Surface& surf_, Rect subrect, Pos pos)
    {
-      Surface surf(surf_);
-      surf.rect() += pos;
+      const Surface& surf = surf_;
 
-      Rect surf_rect = surf.rect();
+      Rect surf_rect = blit_rect_offset(surf.rect(), pos);
       Rect dest_rect = rect;
 
       bool ignore_camera = surf.ignore_camera();
@@ -81,7 +102,7 @@ namespace Blit
       if (!blit_rect_valid(clip))
          return;
 
-      const Pixel* src_data = surf.pixel_raw(clip.pos);
+      const Pixel* src_data = surf.pixel_raw(blit_pos_sub(clip.pos, pos));
       Pixel* dst_data = ignore_camera ?
          pixel_raw_no_offset(clip.pos) : pixel_raw(clip.pos);
 
