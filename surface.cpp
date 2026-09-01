@@ -11,7 +11,7 @@ namespace Blit
 {
    Surface::Surface(Pixel pix, int width, int height)
       : data(blit_surface_data_new_filled(pix, width, height)),
-      m_active_alt_index(0), attribs(NULL),
+      alts(NULL), m_active_alt(NULL), m_active_alt_index(0), attribs(NULL),
       m_rect(blit_rect(blit_pos_zero(), width, height)), m_ignore_camera(false)
    {
       if (!data)
@@ -19,8 +19,8 @@ namespace Blit
    }
 
    Surface::Surface(Data *data)
-      : data(blit_surface_data_ref(data)), m_active_alt_index(0),
-      attribs(NULL),
+      : data(blit_surface_data_ref(data)), alts(NULL), m_active_alt(NULL),
+      m_active_alt_index(0), attribs(NULL),
       m_rect(blit_rect(blit_pos_zero(), data->w, data->h)),
       m_ignore_camera(false)
    {}
@@ -34,8 +34,8 @@ namespace Blit
    }
 
    Surface::Surface(const vector<Alt>& alts, const string& start_id)
-      : data(NULL), m_active_alt_index(0), attribs(NULL),
-      m_ignore_camera(false)
+      : data(NULL), alts(NULL), m_active_alt(NULL), m_active_alt_index(0),
+      attribs(NULL), m_ignore_camera(false)
    {
       if (alts.empty())
          throw logic_error("Alts is empty.");
@@ -48,36 +48,37 @@ namespace Blit
       if (!same_size)
          throw logic_error("Not all alts are of same size.");
 
+      if (!(this->alts = blit_alt_table_new()))
+         throw std::bad_alloc();
+
       for( vector<Alt>::const_iterator alt = alts.begin(); alt!=alts.end(); alt++ )
-         this->alts.insert(std::pair<std::string, Data*>(alt->tag,
-                  blit_surface_data_ref(alt->data)));
+         if (!blit_alt_table_add(this->alts, alt->tag.c_str(), alt->data))
+            throw std::bad_alloc();
 
       active_alt(start_id);
    }
 
    void Surface::active_alt(const string& id, unsigned index)
    {
-      std::pair
-         <std::multimap<std::string, Data*>::const_iterator,
-         std::multimap<std::string, Data*>::const_iterator>
-            itr = alts.equal_range(id);
+      size_t      have = blit_alt_table_count(alts, id.c_str());
+      const char *tag;
+      Data       *ptr;
 
-      iterator_traits<std::multimap<std::string, Data*>::const_iterator>::
-         difference_type dist = distance(itr.first, itr.second);
-
-      if (dist <= static_cast<int>(index))
+      if (have <= index)
          throw logic_error(Utils::join("Subindex is out of bounds. Requested Alt: \"", id, "\" Index: ", index));
 
-      advance(itr.first, index);
-      Data *ptr = itr.first->second;
-      if (!ptr)
+      ptr = blit_alt_table_at(alts, id.c_str(), index);
+      tag = blit_alt_table_tag(alts, id.c_str());
+      if (!ptr || !tag)
          throw logic_error(Utils::join("Alt ID ", id, " does not exist."));
 
-      m_active_alt = id;
+      /* The tag belongs to the table, which this Surface keeps a
+       * reference to for as long as it points at it. */
+      m_active_alt       = tag;
       m_active_alt_index = index;
 
-      /* alts holds its own reference; this takes a second one for the
-       * active slot, released when the old one is dropped. */
+      /* The table holds its own reference; this takes a second one for
+       * the active slot, released when the old one is dropped. */
       blit_surface_data_ref(ptr);
       blit_surface_data_unref(data);
       data = ptr;
@@ -85,12 +86,12 @@ namespace Blit
 
    void Surface::active_alt_index(unsigned index)
    {
-      active_alt(m_active_alt, index);
+      active_alt(m_active_alt ? m_active_alt : "", index);
    }
 
    Surface::Surface()
-      : data(NULL), m_active_alt_index(0), attribs(NULL),
-      m_rect(blit_rect_zero()), m_ignore_camera(false)
+      : data(NULL), alts(NULL), m_active_alt(NULL), m_active_alt_index(0),
+      attribs(NULL), m_rect(blit_rect_zero()), m_ignore_camera(false)
    {}
 
    Surface Surface::sub(Rect rect) const

@@ -4,6 +4,7 @@
 #include "blit.hpp"
 #include "blit_surface_data.h"
 #include "blit_attr_table.h"
+#include "blit_alt_table.h"
 
 #include <memory>
 #include <vector>
@@ -75,8 +76,8 @@ namespace Blit
           * that sort copies - refcount traffic on every swap, and the
           * strings and maps duplicated rather than stolen. */
          Surface(Surface&& other)
-            : data(other.data), alts(std::move(other.alts)),
-            m_active_alt(std::move(other.m_active_alt)),
+            : data(other.data), alts(other.alts),
+            m_active_alt(other.m_active_alt),
             m_active_alt_index(other.m_active_alt_index),
             attribs(other.attribs), m_rect(other.m_rect),
             m_ignore_camera(other.m_ignore_camera)
@@ -84,7 +85,7 @@ namespace Blit
             /* References move with the members; the source keeps none. */
             other.data    = NULL;
             other.attribs = NULL;
-            other.alts.clear();
+            other.alts    = NULL;
          }
 
          Surface& operator=(Surface&& other)
@@ -94,8 +95,8 @@ namespace Blit
                release_all();
 
                data               = other.data;
-               alts               = std::move(other.alts);
-               m_active_alt       = std::move(other.m_active_alt);
+               alts               = other.alts;
+               m_active_alt       = other.m_active_alt;
                m_active_alt_index = other.m_active_alt_index;
                attribs            = other.attribs;
                m_rect             = other.m_rect;
@@ -103,7 +104,7 @@ namespace Blit
 
                other.data    = NULL;
                other.attribs = NULL;
-               other.alts.clear();
+               other.alts    = NULL;
             }
             return *this;
          }
@@ -122,7 +123,6 @@ namespace Blit
          Pixel pixel(Pos pos) const;
          const Pixel* pixel_raw(Pos pos) const;
 
-         std::pair<std::string, unsigned> active_alt() const { return std::pair<std::string, unsigned>(m_active_alt, m_active_alt_index); }
          void active_alt(const std::string& id, unsigned index = 0);
          void active_alt_index(unsigned index);
 
@@ -138,30 +138,28 @@ namespace Blit
          const blit_attr_table_t *attr_table() const { return attribs; }
 
       private:
-         /* One reference held here, and one for every entry in alts. */
+         /* One reference each: the active face's pixels, the face table
+          * and the attribute table. Three counters, no containers. */
          Data *data;
 
-         std::multimap<std::string, Data*> alts;
+         blit_alt_table_t *alts;
 
-         /* One reference for 'data' and one per entry in 'alts'. */
          void retain_all() const
          {
-            std::multimap<std::string, Data*>::const_iterator it;
             blit_surface_data_ref(data);
+            blit_alt_table_ref(alts);
             blit_attr_table_ref(attribs);
-            for (it = alts.begin(); it != alts.end(); ++it)
-               blit_surface_data_ref(it->second);
          }
 
          void release_all()
          {
-            std::multimap<std::string, Data*>::iterator it;
-            for (it = alts.begin(); it != alts.end(); ++it)
-               blit_surface_data_unref(it->second);
+            blit_alt_table_unref(alts);
             blit_attr_table_unref(attribs);
             blit_surface_data_unref(data);
          }
-         std::string m_active_alt;
+         /* Points into the face table, which this Surface holds a
+          * reference to, so it stays valid without owning a string. */
+         const char *m_active_alt;
          unsigned m_active_alt_index;
 
          /* Shared and reference counted, NULL meaning empty - see
