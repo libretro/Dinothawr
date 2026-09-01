@@ -14,7 +14,6 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 	$(CORE_DIR)/surface_cache.cpp \
 	$(CORE_DIR)/surface_cluster.cpp \
 	$(CORE_DIR)/tilemap.cpp \
-	$(CORE_DIR)/audio/mixer.cpp
 
 SOURCES_C :=
 

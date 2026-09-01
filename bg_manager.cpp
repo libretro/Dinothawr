@@ -2,7 +2,9 @@
 #ifndef USE_CXX03
 #include <stdlib.h>
 
+#include "audio/mixer_f32.h"
 #include "audio/mixer_i16.h"
+#include "audio/vorbis_f32.h"
 #include "audio/vorbis_i16.h"
 #include "audio/async_job.h"
 
@@ -36,9 +38,8 @@ namespace Icy
       first = true;
       last = 0;
 
-      /* Reset the int16 path: drain any decode still in flight from a
-       * previous game (discarding its buffer) and clear the music slot.
-       * The float path resets via its own mixer reassignment. */
+      /* Drain any decode still in flight from a previous game
+       * (discarding its buffer) and clear the music slot. */
       deinit();
    }
 
@@ -50,30 +51,28 @@ namespace Icy
    {
       if (audio_is_float())
       {
-         loader.drain();
+         mixer_f32_t *m = get_mixer_f32();
+
+         if (job)
+         {
+            f32_buf_unref((f32_buf_t*)async_job_collect(job));
+            job = NULL;
+         }
+         if (m)
+            mixer_f32_set_music(m, NULL);
          return;
       }
 
-      if (i16_job)
       {
-         i16_buf_t *buf = (i16_buf_t*)async_job_collect(i16_job);
-         i16_job = NULL;
-         if (buf)
-            i16_buf_unref(buf);
-      }
+         mixer_i16_t *m = get_mixer_i16();
 
-      mixer_i16_t *m = get_mixer_i16();
-      if (m)
-         mixer_i16_set_music(m, NULL);
-   }
-
-   /* Runs on the job's thread: nothing here touches the mixer or any
-    * BGManager state, only the path it was handed. C linkage to match
-    * the job's function-pointer type. */
-   extern "C" {
-      static void *bg_decode_i16(void *userdata)
-      {
-         return vorbis_i16_decode_file((const char*)userdata);
+         if (job)
+         {
+            i16_buf_unref((i16_buf_t*)async_job_collect(job));
+            job = NULL;
+         }
+         if (m)
+            mixer_i16_set_music(m, NULL);
       }
    }
 
@@ -112,84 +111,113 @@ namespace Icy
       return index;
    }
 
-   void BGManager::step(Audio::Mixer& mixer)
-   {
-      if (!audio_is_float())
+   /* Both run on the job's thread. Neither touches the mixer or any
+    * BGManager state, only the path it was handed - the decoded buffer
+    * travels back as the job's result and is installed by whoever
+    * collects it. C linkage to match the job's function-pointer type. */
+   extern "C" {
+      static void *bg_decode_f32(void *userdata)
       {
-         /* int16 pipeline: drive the mixer's music slot, decoding the next
-          * track off-thread (like the float loader) so a track change does
-          * not stall the game. While the slot is empty we keep exactly one
-          * decode in flight and install it once ready. */
-         mixer_i16_t *m = get_mixer_i16();
+         return vorbis_f32_decode_file((const char*)userdata);
+      }
 
-         if (mixer_i16_music_active(m))
-            return;
-         if (!tracks.size())
+      static void *bg_decode_i16(void *userdata)
+      {
+         return vorbis_i16_decode_file((const char*)userdata);
+      }
+   }
+
+   /* Drive the mixer's music slot, decoding the next track off-thread so
+    * a track change does not stall the game. While the slot is empty we
+    * keep exactly one decode in flight and install it once ready.
+    *
+    * The two sample types are the same sequence of calls; only the
+    * decode entry point, the buffer type and the stream constructor
+    * differ. */
+   void BGManager::step()
+   {
+      if (audio_is_float())
+      {
+         mixer_f32_t *m = get_mixer_f32();
+
+         if (!m || mixer_f32_music_active(m) || !tracks.size())
             return;
 
-         if (!i16_job)
+         if (!job)
          {
-            /* i16_path is a member so it outlives step(): the job reads
+            /* job_path is a member so it outlives step(): the job reads
              * it on its own thread until it is collected. */
-            i16_path = tracks[next_index()].path;
-            i16_job  = async_job_start(bg_decode_i16, (void*)i16_path.c_str());
+            job_path = tracks[next_index()].path;
+            job      = async_job_start(bg_decode_f32, (void*)job_path.c_str());
 
             /* No thread available - decode inline rather than go silent.
              * A track change is the only place this can be reached and
              * one track is the whole cost. */
-            if (!i16_job)
+            if (!job)
             {
-               i16_buf_t *buf = vorbis_i16_decode_file(i16_path.c_str());
+               f32_buf_t *buf = vorbis_f32_decode_file(job_path.c_str());
                if (buf)
                {
-                  i16_stream_t *stream = i16_pcm_stream_new(buf, 0,
-                        mixer_i16_q15_from_float(tracks[last].gain));
-                  i16_buf_unref(buf);
-                  mixer_i16_set_music(m, stream);
+                  mixer_f32_set_music(m, f32_pcm_stream_new(buf, 0,
+                           tracks[last].gain));
+                  f32_buf_unref(buf); /* the stream holds its own ref */
                }
                return;
             }
          }
 
-         if (async_job_ready(i16_job))
+         if (async_job_ready(job))
          {
-            i16_buf_t *buf = (i16_buf_t*)async_job_collect(i16_job);
-            i16_job = NULL;
+            f32_buf_t *buf = (f32_buf_t*)async_job_collect(job);
+            job = NULL;
 
             if (buf)
             {
-               i16_stream_t *stream = i16_pcm_stream_new(buf, 0,
-                     mixer_i16_q15_from_float(tracks[last].gain));
-               i16_buf_unref(buf); /* stream holds its own reference */
-               mixer_i16_set_music(m, stream);
+               mixer_f32_set_music(m, f32_pcm_stream_new(buf, 0,
+                        tracks[last].gain));
+               f32_buf_unref(buf);
             }
          }
          return;
       }
 
-      if (current && current->valid())
-         return;
-
-      if (!tracks.size())
-         return;
-
-      /* The float path used to inline a second copy of next_index(); the
-       * two are the same choice and drifting apart would be a bug. */
-      if (!loader.size())
-         loader.request_vorbis(tracks[next_index()].path);
-
-      std::shared_ptr<std::vector<float> > ret = loader.flush();
-
-      if (ret)
       {
-         current = make_shared<Audio::PCMStream>(ret);
-         current->volume(tracks[last].gain);
-      }
-      else
-         current.reset();
+         mixer_i16_t *m = get_mixer_i16();
 
-      if (current)
-         mixer.add_stream(current);
+         if (!m || mixer_i16_music_active(m) || !tracks.size())
+            return;
+
+         if (!job)
+         {
+            job_path = tracks[next_index()].path;
+            job      = async_job_start(bg_decode_i16, (void*)job_path.c_str());
+
+            if (!job)
+            {
+               i16_buf_t *buf = vorbis_i16_decode_file(job_path.c_str());
+               if (buf)
+               {
+                  mixer_i16_set_music(m, i16_pcm_stream_new(buf, 0,
+                           mixer_i16_q15_from_float(tracks[last].gain)));
+                  i16_buf_unref(buf);
+               }
+               return;
+            }
+         }
+
+         if (async_job_ready(job))
+         {
+            i16_buf_t *buf = (i16_buf_t*)async_job_collect(job);
+            job = NULL;
+
+            if (buf)
+            {
+               mixer_i16_set_music(m, i16_pcm_stream_new(buf, 0,
+                        mixer_i16_q15_from_float(tracks[last].gain)));
+               i16_buf_unref(buf);
+            }
+         }
+      }
    }
 }
 #endif

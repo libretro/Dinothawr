@@ -4,7 +4,7 @@
 #include "surface.hpp"
 #include "tilemap.hpp"
 #include "font.hpp"
-#include "audio/mixer.hpp"
+#include "audio/mixer_f32.h"
 #include "audio/mixer_i16.h"
 #include "audio/async_job.h"
 
@@ -17,10 +17,11 @@
 
 namespace Icy
 {
-   Audio::Mixer& get_mixer();
-   /* Integer audio backend, used when the frontend does not advertise
-    * float output. get_mixer_i16() is non-NULL only in that case;
-    * audio_is_float() reports which pipeline is live. */
+   /* The two audio backends. Exactly one is live for a given game:
+    * audio_is_float() says which, and the other accessor returns NULL.
+    * They are the same mixer in two sample types, so the managers drive
+    * both through the same sequence of calls. */
+   mixer_f32_t* get_mixer_f32();
    mixer_i16_t* get_mixer_i16();
    bool audio_is_float();
    const std::string& get_basedir();
@@ -70,9 +71,9 @@ namespace Icy
          void play_sfx(const std::string &ident, float volume = 1.0f) const;
 
       private:
-         std::map<std::string, std::shared_ptr<std::vector<float>>> effects;
-         /* int16 pipeline: decoded WAV kept as reference-counted int16
-          * PCM, played as i16_pcm streams into the int16 mixer. */
+         /* Decoded WAV kept as reference-counted PCM in whichever sample
+          * type the live mixer wants, played as pcm streams into it. */
+         std::map<std::string, f32_buf_t*> effects_f32;
          std::map<std::string, i16_buf_t*> effects_i16;
 #else
       public:
@@ -93,7 +94,7 @@ namespace Icy
             float gain;
          };
 
-         BGManager() : first(true), last(0), rng_state(0), i16_job(NULL) {}
+         BGManager() : first(true), last(0), rng_state(0), job(NULL) {}
 
          void init(const std::vector<Track>& tracks);
 
@@ -101,11 +102,9 @@ namespace Icy
           * decode still in flight. Call before the mixer it feeds goes
           * away. */
          void deinit();
-         void step(Audio::Mixer& mixer);
+         void step();
 
       private:
-         std::shared_ptr<Audio::Stream> current;
-         Audio::VorbisLoader loader;
          std::vector<Track> tracks;
          bool first;
          unsigned last;
@@ -118,12 +117,12 @@ namespace Icy
          uint32_t rng_state;
          unsigned rng_next(unsigned n);
 
-         /* int16 path: the next track is decoded off-thread, mirroring the
-          * float loader, so a track change does not stall the game. The
-          * job outlives step(), and i16_path is the string it decodes
-          * from, so both live here rather than on the stack. */
-         async_job_t *i16_job;
-         std::string i16_path;
+         /* The next track is decoded off-thread so a track change does
+          * not stall the game. The job outlives step(), and job_path is
+          * the string it reads on its own thread, so both live here
+          * rather than on the stack. */
+         async_job_t *job;
+         std::string job_path;
 
          unsigned next_index();
 #else
@@ -134,7 +133,7 @@ namespace Icy
             float gain;
          };
          void init(const std::vector<Track>& tracks) {}
-         void step(Audio::Mixer& mixer) {}
+         void step() {}
 #endif
    };
 

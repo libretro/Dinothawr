@@ -8,7 +8,7 @@
 
 #include "game.hpp"
 #include "utils.hpp"
-#include "audio/mixer.hpp"
+#include "audio/mixer_f32.h"
 
 #include <file/file_path.h>
 #include <streams/file_stream.h>
@@ -23,7 +23,7 @@ static unique_ptr<GameManager> game;
 static string game_path;
 static string game_path_dir;
 
-static Audio::Mixer mixer;
+static mixer_f32_t *mixer_f32 = NULL;
 /* Integer audio backend, created only when the frontend does not
  * advertise float output. When live, all SFX/BG audio flows through this
  * deterministic int16 mixer instead of the float one. */
@@ -55,7 +55,7 @@ static double   g_framerate = 60.0;
 
 namespace Icy
 {
-   Audio::Mixer& get_mixer() { return mixer; }
+   mixer_f32_t* get_mixer_f32() { return mixer_f32; }
    mixer_i16_t* get_mixer_i16() { return mixer_i16; }
    bool audio_is_float() { return s_audio_float; }
    const string& get_basedir() { return game_path_dir; }
@@ -217,7 +217,7 @@ static void audio_callback(void)
     * accepts float we push it straight through - no float->int16 step. */
    if (audio_batch_float_cb)
    {
-      mixer.render(audio_buffer_f, n);
+      mixer_f32_render(mixer_f32, audio_buffer_f, n);
       for (unsigned i = 0; i < n; )
       {
          unsigned written = audio_batch_float_cb(audio_buffer_f + 2 * i, n - i);
@@ -317,7 +317,7 @@ void retro_run(void)
     * emulation speed, so fast-forward never sped up sound. */
    game->iterate();
 
-   get_bg().step(mixer);
+   get_bg().step();
    audio_callback();
 
    if (game->done())
@@ -437,18 +437,24 @@ bool retro_load_game(const struct retro_game_info* info)
 
       s_audio_float = (audio_batch_float_cb != NULL);
 
-      /* (Re)create the int16 mixer for the integer fallback path. Freeing
-       * any previous instance also tears down its streams; the managers
-       * keep their decoded buffers separately, so this is safe on reload. */
+      /* (Re)create whichever mixer this game will use. Freeing any
+       * previous instance also tears down its streams; the managers keep
+       * their decoded buffers separately, so this is safe on reload. */
+      if (mixer_f32)
+      {
+         mixer_f32_free(mixer_f32);
+         mixer_f32 = NULL;
+      }
       if (mixer_i16)
       {
          mixer_i16_free(mixer_i16);
          mixer_i16 = NULL;
       }
-      if (!s_audio_float)
-      {
+
+      if (s_audio_float)
+         mixer_f32 = mixer_f32_new();
+      else
          mixer_i16 = mixer_i16_new();
-      }
    }
 
    struct retro_input_descriptor desc[] = {
@@ -467,12 +473,11 @@ bool retro_load_game(const struct retro_game_info* info)
 
    load_game(game_path);
 
-   mixer = Audio::Mixer();
    /* Audio is now produced synchronously from retro_run (no async audio
     * callback), so the mixers are simply always enabled while a game is
     * loaded - the audio_set_state enable/disable handshake is gone. */
-   mixer.enable(true);
-   mixer_i16_set_enabled(mixer_i16, true); /* NULL-safe in float mode */
+   mixer_f32_set_enabled(mixer_f32, true); /* both are NULL-safe: only */
+   mixer_i16_set_enabled(mixer_i16, true); /* the live one is non-NULL */
 
    retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
    environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
@@ -495,6 +500,11 @@ void retro_unload_game(void)
     * reach. */
    get_bg().deinit();
 
+   if (mixer_f32)
+   {
+      mixer_f32_free(mixer_f32);
+      mixer_f32 = NULL;
+   }
    if (mixer_i16)
    {
       mixer_i16_free(mixer_i16);
