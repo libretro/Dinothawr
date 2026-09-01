@@ -556,6 +556,9 @@ namespace Icy
       : position(blit_pos_zero()), m_path(path), completion(false),
       best_pushes(0)
    {
+      /* preview is a raw surface: it has no constructor to zero it. */
+      blit_surface_init(&preview);
+
       Game game{path};
       game.set_bg(bg);
 
@@ -602,7 +605,7 @@ namespace Icy
                preview_height);
          if (!pdata)
             throw std::bad_alloc();
-         preview = Surface(pdata);
+         blit_surface_init_data(&preview, pdata);
          blit_surface_data_unref(pdata);
       }
       pos(blit_pos(Game::fb_width, Game::fb_height) / scale_factor - blit_pos(5, 5));
@@ -611,7 +614,7 @@ namespace Icy
    void GameManager::Level::render(RenderTarget& target) const
    {
       //preview.rect().pos = position;
-      target.blit_offset(preview, blit_rect_zero(), position); 
+      target.blit_offset(&preview, blit_rect_zero(), position);
    }
 
    GameManager::SaveManager::SaveManager(vector<GameManager::Chapter> &chaps)

@@ -291,7 +291,36 @@ namespace Icy
          {
             public:
                Level() : position(blit_pos_zero()),
-                  completion(false), best_pushes(0) {}
+                  completion(false), best_pushes(0)
+               { blit_surface_init(&preview); }
+
+               /* preview is a raw surface, so the reference counting is
+                * explicit: Chapter keeps Levels in a vector. */
+               Level(const Level& other)
+                  : position(other.position), m_path(other.m_path),
+                  m_name(other.m_name), preview(other.preview),
+                  completion(other.completion),
+                  best_pushes(other.best_pushes)
+               { blit_surface_retain(&preview); }
+
+               Level& operator=(const Level& other)
+               {
+                  if (this != &other)
+                  {
+                     blit_surface_retain(&other.preview);
+                     blit_surface_release(&preview);
+
+                     position    = other.position;
+                     preview     = other.preview;
+                     m_path      = other.m_path;
+                     m_name      = other.m_name;
+                     completion  = other.completion;
+                     best_pushes = other.best_pushes;
+                  }
+                  return *this;
+               }
+
+               ~Level() { blit_surface_release(&preview); }
 
                Blit::Pos pos() const { return position; }
                void pos(Blit::Pos p) { position = p; }
@@ -314,7 +343,7 @@ namespace Icy
                Blit::Pos position;
                std::string m_path;
                std::string m_name;
-               Blit::Surface preview;
+               blit_surface_t preview;
                bool completion;
                unsigned best_pushes;
          };
