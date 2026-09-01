@@ -9,11 +9,9 @@
 #include <utility>
 #include <cmath>
 #include <string>
-#include <future>
-#include <chrono>
 #include <queue>
-#include <mutex>
 #include <formats/audio.h>
+#include "async_job.h"
 #include <formats/data_transfer.h>
 #endif
 
@@ -81,7 +79,7 @@ namespace Audio
 
       private:
          std::shared_ptr<std::vector<float>> data;
-         std::atomic<std::size_t> ptr;
+         std::size_t ptr;
    };
 
    class WAVFile
@@ -121,15 +119,25 @@ namespace Audio
    class VorbisLoader
    {
       public:
+         VorbisLoader() : job(NULL) {}
+
          void request_vorbis(const std::string& path);
          std::shared_ptr<std::vector<float>> flush();
-         size_t size() const { return inflight.size(); }
+
+         /* Non-zero while a decode is outstanding or a result is waiting
+          * to be picked up. */
+         size_t size() const { return (job ? 1 : 0) + finished.size(); }
+
+         /* Waits out a decode still running and drops it. */
+         void drain();
 
       private:
-         std::vector<std::future<std::vector<float>>> inflight;
-         std::queue<std::vector<float>> finished;
-
-         void cleanup();
+         /* One decode at a time, which is all the callers ever ask for.
+          * req_path is the string the job reads on its own thread, so it
+          * has to outlive request_vorbis(). */
+         async_job_t *job;
+         std::string  req_path;
+         std::queue<std::vector<float> > finished;
    };
 
    class Mixer
@@ -148,18 +156,14 @@ namespace Audio
          void master_volume(float vol) { master_vol = vol; }
          float master_volume() const { return master_vol; }
 
-         void lock() { m_lock->lock(); }
-         void unlock() { m_lock->unlock(); }
-
-         void enable(bool enable) { m_enabled->store(enable); }
-         bool enabled() const { return m_enabled->load(); }
+         void enable(bool en) { m_enabled = en; }
+         bool enabled() const { return m_enabled; }
 
       private:
          std::vector<float> buffer;
          std::vector<float> conv_buffer;
          std::vector<std::shared_ptr<Stream>> streams;
-         std::unique_ptr<std::recursive_mutex> m_lock;
-         std::unique_ptr<std::atomic<unsigned>> m_enabled; // Have to use pointer as std::atomic is not CopyAssignable.
+         bool m_enabled;
 
          float master_vol;
          void purge_dead_streams();

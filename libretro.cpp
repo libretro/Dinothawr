@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <iostream>
 #include <cmath>
-#include <mutex>
 
 #include "game.hpp"
 #include "utils.hpp"
@@ -31,17 +30,9 @@ static Audio::Mixer mixer;
 static mixer_i16_t *mixer_i16 = NULL;
 static bool s_audio_float = false;
 
-/* Serialises int16-mixer access between the main thread (SFX/BG mutation)
- * and the frontend audio-callback thread, mirroring the float mixer's
- * internal mutex. C language linkage so the function-pointer type matches
- * the mixer's i16_lock_fn cleanly. */
-static std::recursive_mutex mixer_i16_mutex;
-extern "C" {
-   static void mixer_i16_lock_cb(void *data)
-   { static_cast<std::recursive_mutex*>(data)->lock(); }
-   static void mixer_i16_unlock_cb(void *data)
-   { static_cast<std::recursive_mutex*>(data)->unlock(); }
-}
+/* No lock hooks: audio is rendered from retro_run on the same thread
+ * that mutates the mixer, and the audio decode jobs never reach into it.
+ */
 static SFXManager sfx;
 static BGManager bg_music;
 
@@ -457,8 +448,6 @@ bool retro_load_game(const struct retro_game_info* info)
       if (!s_audio_float)
       {
          mixer_i16 = mixer_i16_new();
-         mixer_i16_set_lock(mixer_i16, mixer_i16_lock_cb,
-               mixer_i16_unlock_cb, &mixer_i16_mutex);
       }
    }
 

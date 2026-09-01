@@ -13,19 +13,16 @@
 using namespace Blit::Utils;
 using namespace std;
 
-typedef lock_guard<recursive_mutex> LockGuard;
-
 namespace Audio
 {
-   Mixer::Mixer() : master_vol(1.0f)
-   {
-      m_enabled = Blit::Utils::make_unique<std::atomic<unsigned>>();
-      m_lock = Blit::Utils::make_unique<recursive_mutex>();
-   }
+   /* No lock: audio is rendered from retro_run on the same thread that
+    * adds and clears streams. The decode jobs never touch the mixer -
+    * they hand back a buffer and the caller installs it. */
+   Mixer::Mixer() : m_enabled(false), master_vol(1.0f)
+   {}
 
    void Mixer::add_stream(shared_ptr<Stream> str)
    {
-      LockGuard guard(*m_lock);
       streams.push_back(std::move(str));
    }
 
@@ -36,13 +33,11 @@ namespace Audio
 
    void Mixer::purge_dead_streams()
    {
-      LockGuard guard(*m_lock);
       streams.erase(remove_if(streams.begin(), streams.end(), erase_mixer_stream), streams.end());
    }
 
    void Mixer::render(float* out_buffer, size_t frames)
    {
-      LockGuard guard(*m_lock);
       purge_dead_streams();
 
       fill(out_buffer, out_buffer + frames * channels, 0.0f);
@@ -57,7 +52,6 @@ namespace Audio
 
    void Mixer::render(int16_t* out_buffer, size_t frames)
    {
-      LockGuard guard(*m_lock);
       conv_buffer.reserve(frames * channels);
       render(conv_buffer.data(), frames);
 
@@ -66,7 +60,6 @@ namespace Audio
 
    void Mixer::clear()
    {
-      LockGuard guard(*m_lock);
       streams.clear();
    }
 
@@ -214,8 +207,8 @@ error:
       /* One read of the whole stream instead of a loop of 4096-frame
        * chunks.  It is no more blocking than what it replaces: the
        * chunked form ran the file to completion in a tight loop with no
-       * yield between chunks, and the only caller of decode() runs it
-       * under std::async - this does the same work on the same worker
+       * yield between chunks, and the only caller of decode() runs it on
+       * a decode job - this does the same work on the same worker
        * thread, about 17% less of it, and sizes the output once rather
        * than growing it by doubling (which transiently holds the old
        * buffer and the new one at every move).
@@ -355,50 +348,78 @@ error:
       return rendered;
    }
 
+   /* Runs on the job's thread. Touches nothing but the path it is given;
+    * the decoded samples travel back as the job's result and are
+    * installed by whoever collects it. C linkage to match the job's
+    * function-pointer type. */
+   extern "C" {
+      static void *vorbis_decode_job(void *userdata)
+      {
+         try
+         {
+            VorbisFile file{(const char*)userdata};
+            return new vector<float>(file.decode());
+         }
+         catch (const exception& e)
+         {
+            cerr << "Vorbis decode failed ... " << e.what() << endl;
+            return NULL;
+         }
+      }
+   }
+
    void VorbisLoader::request_vorbis(const string& path)
    {
-      inflight.push_back(async(launch::async, [path]() {
-                  VorbisFile file{path};
-                  return file.decode();
-               }));
+      if (job)
+         return;
+
+      req_path = path;
+      if ((job = async_job_start(vorbis_decode_job, (void*)req_path.c_str())))
+         return;
+
+      /* No thread available - decode inline so the track still plays. */
+      {
+         vector<float> *pcm = (vector<float>*)vorbis_decode_job((void*)req_path.c_str());
+         if (pcm)
+         {
+            finished.push(std::move(*pcm));
+            delete pcm;
+         }
+      }
    }
 
-   static bool erase_vorbis_stream(const future<vector<float>>& fut)
+   void VorbisLoader::drain()
    {
-      return !fut.valid();
-   }
+      if (!job)
+         return;
 
-   void VorbisLoader::cleanup()
-   {
-      inflight.erase(remove_if(inflight.begin(), inflight.end(), erase_vorbis_stream), inflight.end());
+      delete (vector<float>*)async_job_collect(job);
+      job = NULL;
    }
 
    shared_ptr<vector<float>> VorbisLoader::flush()
    {
-      try
+      if (job && async_job_ready(job))
       {
-         for (auto& fut : inflight)
-            if (fut.wait_for(chrono::seconds(0)) == future_status::ready)
-               finished.push(fut.get()); 
+         vector<float> *pcm = (vector<float>*)async_job_collect(job);
+         job = NULL;
 
-         cleanup();
-
-         if (finished.size())
+         if (pcm)
          {
-            std::vector<float> f = finished.front();
-            std::shared_ptr<std::vector<float> > ret = make_shared<vector<float>>(std::move(f));
-            finished.pop();
-            return ret;
+            finished.push(std::move(*pcm));
+            delete pcm;
          }
-         else
-            return {};
       }
-      catch (const exception& e)
+
+      if (finished.size())
       {
-         cerr << "VorbisLoader::flush() failed ... " << e.what() << endl;
-         cleanup();
-         return {};
+         shared_ptr<vector<float> > ret =
+            make_shared<vector<float>>(std::move(finished.front()));
+         finished.pop();
+         return ret;
       }
+
+      return {};
    }
 }
 #endif

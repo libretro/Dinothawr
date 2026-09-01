@@ -6,6 +6,7 @@
 #include "font.hpp"
 #include "audio/mixer.hpp"
 #include "audio/mixer_i16.h"
+#include "audio/async_job.h"
 
 #include <string>
 #include <functional>
@@ -91,6 +92,9 @@ namespace Icy
             std::string path;
             float gain;
          };
+
+         BGManager() : first(true), last(0), rng_state(0), i16_job(NULL) {}
+
          void init(const std::vector<Track>& tracks);
 
          /* Releases everything the int16 path is holding, including a
@@ -115,8 +119,11 @@ namespace Icy
          unsigned rng_next(unsigned n);
 
          /* int16 path: the next track is decoded off-thread, mirroring the
-          * float loader, so a track change does not stall the game. */
-         std::future<i16_buf_t*> i16_future;
+          * float loader, so a track change does not stall the game. The
+          * job outlives step(), and i16_path is the string it decodes
+          * from, so both live here rather than on the stack. */
+         async_job_t *i16_job;
+         std::string i16_path;
 
          unsigned next_index();
 #else

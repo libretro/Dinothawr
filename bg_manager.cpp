@@ -2,11 +2,9 @@
 #ifndef USE_CXX03
 #include <stdlib.h>
 
-#include <future>
-#include <chrono>
-
 #include "audio/mixer_i16.h"
 #include "audio/vorbis_i16.h"
+#include "audio/async_job.h"
 
 using namespace std;
 
@@ -44,20 +42,22 @@ namespace Icy
       deinit();
    }
 
-   /* A decode in flight owns an i16_buf_t that only the future can hand
-    * over: std::future's destructor releases the shared state and knows
-    * nothing about the raw pointer inside it, so the buffer has to be
-    * collected here or it is lost.  get() waits for the decode to
-    * finish, which is bounded by one track and is what a reset already
-    * does. */
+   /* The buffer a decode in flight is producing is reachable only
+    * through the job, so it has to be collected here or it is lost.
+    * Collecting waits for the decode to finish, which is bounded by one
+    * track and is what a reset already does. */
    void BGManager::deinit()
    {
       if (audio_is_float())
-         return;
-
-      if (i16_future.valid())
       {
-         i16_buf_t *buf = i16_future.get();
+         loader.drain();
+         return;
+      }
+
+      if (i16_job)
+      {
+         i16_buf_t *buf = (i16_buf_t*)async_job_collect(i16_job);
+         i16_job = NULL;
          if (buf)
             i16_buf_unref(buf);
       }
@@ -65,6 +65,16 @@ namespace Icy
       mixer_i16_t *m = get_mixer_i16();
       if (m)
          mixer_i16_set_music(m, NULL);
+   }
+
+   /* Runs on the job's thread: nothing here touches the mixer or any
+    * BGManager state, only the path it was handed. C linkage to match
+    * the job's function-pointer type. */
+   extern "C" {
+      static void *bg_decode_i16(void *userdata)
+      {
+         return vorbis_i16_decode_file((const char*)userdata);
+      }
    }
 
    /* xorshift32: enough for picking one of a handful of tracks, and it
@@ -117,17 +127,34 @@ namespace Icy
          if (!tracks.size())
             return;
 
-         if (!i16_future.valid())
+         if (!i16_job)
          {
-            std::string path = tracks[next_index()].path;
-            i16_future = std::async(std::launch::async,
-                  [path] { return vorbis_i16_decode_file(path.c_str()); });
+            /* i16_path is a member so it outlives step(): the job reads
+             * it on its own thread until it is collected. */
+            i16_path = tracks[next_index()].path;
+            i16_job  = async_job_start(bg_decode_i16, (void*)i16_path.c_str());
+
+            /* No thread available - decode inline rather than go silent.
+             * A track change is the only place this can be reached and
+             * one track is the whole cost. */
+            if (!i16_job)
+            {
+               i16_buf_t *buf = vorbis_i16_decode_file(i16_path.c_str());
+               if (buf)
+               {
+                  i16_stream_t *stream = i16_pcm_stream_new(buf, 0,
+                        mixer_i16_q15_from_float(tracks[last].gain));
+                  i16_buf_unref(buf);
+                  mixer_i16_set_music(m, stream);
+               }
+               return;
+            }
          }
 
-         if (i16_future.wait_for(std::chrono::seconds(0))
-               == std::future_status::ready)
+         if (async_job_ready(i16_job))
          {
-            i16_buf_t *buf = i16_future.get(); /* clears the future */
+            i16_buf_t *buf = (i16_buf_t*)async_job_collect(i16_job);
+            i16_job = NULL;
 
             if (buf)
             {
@@ -139,8 +166,6 @@ namespace Icy
          }
          return;
       }
-
-      lock_guard<Audio::Mixer> guard(mixer);
 
       if (current && current->valid())
          return;
