@@ -176,12 +176,10 @@ namespace Blit
          std::vector<Elem>& vec();
          const std::vector<Elem>& vec() const;
 
-         void set_transform(std::function<Pos (Pos)> func);
          void render(RenderTarget& target) const;
 
       private:
          std::vector<Elem> elems;
-         std::function<Pos (Pos)> func;
    };
 
    class SurfaceCache

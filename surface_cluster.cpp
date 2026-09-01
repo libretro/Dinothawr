@@ -12,18 +12,12 @@ namespace Blit
       return elems;
    }
 
-   void SurfaceCluster::set_transform(std::function<Pos (Pos)> func)
-   {
-      this->func = func;
-   }
-
    void SurfaceCluster::render(RenderTarget& target) const
    {
-      for (std::vector<Blit::SurfaceCluster::Elem>::const_iterator surf = elems.begin(); surf != elems.end(); surf++) 
-      {
+      std::vector<Elem>::const_iterator surf;
+
+      for (surf = elems.begin(); surf != elems.end(); ++surf)
          target.blit_offset(surf->surf, blit_rect_zero(),
-               position + (func ? func(surf->offset) : surf->offset));
-      }
+               position + surf->offset);
    }
 }
-
