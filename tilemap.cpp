@@ -219,15 +219,13 @@ namespace Blit
    {
       Blit::Tilemap::Layer& layer = m_layers.at(layer_index);
       std::vector<Blit::SurfaceCluster::Elem>& elems = layer.cluster.vec();
+      size_t i;
 
-      std::vector<Blit::SurfaceCluster::Elem>::iterator itr = std::find_if(elems.begin(), elems.end(), [offset](const SurfaceCluster::Elem& elem) {
-               return (elem.surf.rect().pos + elem.offset) == offset;
-            });
+      for (i = 0; i < elems.size(); i++)
+         if ((elems[i].surf.rect().pos + elems[i].offset) == offset)
+            return &elems[i].surf;
 
-      if (itr == elems.end())
-         return NULL;
-
-      return &itr->surf;
+      return NULL;
    }
 
    Surface* Tilemap::find_tile(const std::string& name, Pos pos)
@@ -246,15 +244,13 @@ namespace Blit
    {
       const Blit::Tilemap::Layer& layer = m_layers.at(layer_index);
       const std::vector<Blit::SurfaceCluster::Elem>& elems = layer.cluster.vec();
+      size_t i;
 
-      auto itr = std::find_if(elems.begin(), elems.end(), [offset](const SurfaceCluster::Elem& elem) {
-               return (elem.surf.rect().pos + elem.offset) == offset;
-            });
+      for (i = 0; i < elems.size(); i++)
+         if ((elems[i].surf.rect().pos + elems[i].offset) == offset)
+            return &elems[i].surf;
 
-      if (itr == elems.end())
-         return NULL;
-
-      return &itr->surf;
+      return NULL;
    }
 
    const Surface* Tilemap::find_tile(const std::string& name, Pos pos) const

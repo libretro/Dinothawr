@@ -245,7 +245,7 @@ namespace Icy
          std::string input_to_string(Input input);
          Input string_to_input(const std::string& dir);
 
-         std::vector<std::reference_wrapper<Blit::SurfaceCluster::Elem>> get_tiles_with_attr(const std::string& layer,
+         std::vector<Blit::SurfaceCluster::Elem*> get_tiles_with_attr(const std::string& layer,
                const std::string& attr, const std::string& val = "");
 
          EdgeDetector push;

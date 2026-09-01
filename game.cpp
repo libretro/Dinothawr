@@ -102,22 +102,29 @@ namespace Icy
          m_video_cb(target.buffer(), target.width(), target.height(), target.width() * sizeof(Pixel));
    }
 
-   vector<reference_wrapper<SurfaceCluster::Elem>> Game::get_tiles_with_attr(const string& name,
+   /* A plain scan rather than copy_if over a reference_wrapper vector:
+    * the elements are about to stop living in a std::vector, and this
+    * form does not care what holds them. */
+   vector<SurfaceCluster::Elem*> Game::get_tiles_with_attr(const string& name,
          const string& attr, const string& val)
    {
-      vector<reference_wrapper<SurfaceCluster::Elem>> surfs;
+      vector<SurfaceCluster::Elem*> surfs;
       Blit::Tilemap::Layer *layer = map.find_layer(name);
       if (!layer)
          return surfs;
 
-      copy_if(layer->cluster.vec().begin(),
-            layer->cluster.vec().end(),
-            back_inserter(surfs), [&attr, &val](const SurfaceCluster::Elem& surf) -> bool {
-               const char *found = surf.surf.attr(attr.c_str());
-               if (val.empty())
-                  return found != NULL;
-               return found && val == found;
-            });
+      {
+         std::vector<SurfaceCluster::Elem>& elems = layer->cluster.vec();
+         size_t i;
+
+         for (i = 0; i < elems.size(); i++)
+         {
+            const char *found = elems[i].surf.attr(attr.c_str());
+
+            if (val.empty() ? (found != NULL) : (found && val == found))
+               surfs.push_back(&elems[i]);
+         }
+      }
 
       return surfs;
    }
@@ -126,7 +133,7 @@ namespace Icy
    {
       won_frame_cnt++;
 
-      std::vector<std::reference_wrapper<Blit::SurfaceCluster::Elem> > goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      std::vector<Blit::SurfaceCluster::Elem*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
 
       const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
 
@@ -148,11 +155,11 @@ namespace Icy
 
       for (auto& block : goal_blocks)
       {
-         block.get().surf.active_alt(state);
+         block->surf.active_alt(state);
 
          // Shift defrosted block same way player sprite is (16x17, etc), but only when defrost kicks in.
          if (won_frame_cnt >= 1 * frame_per_iter)
-            block.get().offset = player_off;
+            block->offset = player_off;
       }
 
       m_won_early = (won_frame_cnt >= frame_per_iter * 3) && push.set(m_input_cb(Input::Push));
@@ -176,21 +183,23 @@ namespace Icy
          || (won_frame_cnt >= frames_to_ticks(won_frame_cnt_limit));
    }
 
-   static bool is_game_won(const Blit::SurfaceCluster::Elem& a, const Blit::SurfaceCluster::Elem& b)
+   static bool is_game_won(const Blit::SurfaceCluster::Elem *a,
+         const Blit::SurfaceCluster::Elem *b)
    {
-      return a.surf.rect().pos == b.surf.rect().pos;
+      return a->surf.rect().pos == b->surf.rect().pos;
    }
 
-   static bool sort_blocks(const SurfaceCluster::Elem& a, const SurfaceCluster::Elem& b)
+   static bool sort_blocks(const SurfaceCluster::Elem *a,
+         const SurfaceCluster::Elem *b)
    {
-      return a.surf.rect().pos < b.surf.rect().pos;
+      return a->surf.rect().pos < b->surf.rect().pos;
    }
 
    // Checks if all goals on floor and blocks are aligned with each other.
    bool Game::won_condition()
    {
-      std::vector<std::reference_wrapper<Blit::SurfaceCluster::Elem> > goal_floor  = get_tiles_with_attr("floor", "goal", "true");
-      std::vector<std::reference_wrapper<Blit::SurfaceCluster::Elem> > goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      std::vector<Blit::SurfaceCluster::Elem*> goal_floor  = get_tiles_with_attr("floor", "goal", "true");
+      std::vector<Blit::SurfaceCluster::Elem*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
 
       if (goal_floor.size() != goal_blocks.size())
          throw logic_error("Number of goal floors and goal blocks do not match.");
