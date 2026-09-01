@@ -231,9 +231,9 @@ namespace Icy
          void update_triggers();
          void move_if_no_collision(Input input);
          void push_block();
-         bool is_offset_collision(Blit::Surface& surf, Blit::Pos offset);
+         bool is_offset_collision(blit_surface_t& surf, Blit::Pos offset);
 
-         bool tile_stepper(Blit::Surface& surf, Blit::Pos step_dir);
+         bool tile_stepper(blit_surface_t& surf, Blit::Pos step_dir);
          bool win_animation_stepper();
 
          unsigned best_pushes;

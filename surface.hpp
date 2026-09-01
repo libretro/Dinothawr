@@ -7,6 +7,7 @@
 #include "blit_alt_table.h"
 #include "blit_surface.h"
 #include "blit_render_target.h"
+#include "blit_surface_cluster.h"
 
 #include <memory>
 #include <new>
@@ -128,6 +129,7 @@ namespace Blit
          const blit_attr_table_t *attr_table() const { return s.attribs; }
 
          const blit_surface_t& raw() const { return s; }
+         blit_surface_t& raw() { return s; }
 
       private:
          /* Always throws; never returns. */
@@ -159,27 +161,78 @@ namespace Blit
          Pos position;
    };
 
+   /* A wrapper over blit_surface_cluster_t, so the engine's Renderable
+    * dispatch still reaches it. The elements belong to the C struct;
+    * this only forwards. */
    class SurfaceCluster : public Renderable
    {
       public:
-         struct Elem
-         {
-            Surface surf;
-            Pos offset;
-            unsigned tag;
-         };
+         typedef blit_cluster_elem_t Elem;
 
-         SurfaceCluster()
+         SurfaceCluster() { blit_surface_cluster_init(&c); }
+
+         SurfaceCluster(const SurfaceCluster& other)
          {
+            blit_surface_cluster_init(&c);
+            *this = other;
          }
 
-         std::vector<Elem>& vec();
-         const std::vector<Elem>& vec() const;
+         SurfaceCluster& operator=(const SurfaceCluster& other)
+         {
+            if (this != &other)
+            {
+               size_t i;
+
+               blit_surface_cluster_release(&c);
+               position = other.position;
+
+               for (i = 0; i < other.c.count; i++)
+                  if (!blit_surface_cluster_add(&c, &other.c.elems[i].surf,
+                           other.c.elems[i].offset))
+                     throw std::bad_alloc();
+            }
+            return *this;
+         }
+
+         SurfaceCluster(SurfaceCluster&& other) : c(other.c)
+         {
+            position = other.position;
+            blit_surface_cluster_init(&other.c);
+         }
+
+         SurfaceCluster& operator=(SurfaceCluster&& other)
+         {
+            if (this != &other)
+            {
+               blit_surface_cluster_release(&c);
+               c        = other.c;
+               position = other.position;
+               blit_surface_cluster_init(&other.c);
+            }
+            return *this;
+         }
+
+         ~SurfaceCluster() { blit_surface_cluster_release(&c); }
+
+         void add(const Surface& surf, Pos offset)
+         {
+            if (!blit_surface_cluster_add(&c, &surf.raw(), offset))
+               throw std::bad_alloc();
+         }
+
+         size_t size() const { return c.count; }
+         Elem* at(size_t i) { return &c.elems[i]; }
+         const Elem* at(size_t i) const { return &c.elems[i]; }
+
+         /* The element whose surface sits at @offset, or NULL. */
+         Elem* find(Pos offset) { return blit_surface_cluster_find(&c, offset); }
+         const Elem* find(Pos offset) const
+         { return blit_surface_cluster_find(&c, offset); }
 
          void render(RenderTarget& target) const;
 
       private:
-         std::vector<Elem> elems;
+         blit_surface_cluster_t c;
    };
 
    class SurfaceCache
@@ -320,6 +373,8 @@ namespace Blit
 
          void blit_offset(const Surface& surf, Rect subrect, Pos offset)
          { blit_render_target_blit_offset(&t, &surf.raw(), subrect, offset); }
+
+         blit_render_target_t& raw() { return t; }
 
       private:
          /* Always throws; never returns. */

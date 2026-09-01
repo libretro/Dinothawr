@@ -23,6 +23,7 @@ SOURCES_C += $(CORE_DIR)/blit_attr_table.c
 SOURCES_C += $(CORE_DIR)/blit_alt_table.c
 SOURCES_C += $(CORE_DIR)/blit_surface.c
 SOURCES_C += $(CORE_DIR)/blit_render_target.c
+SOURCES_C += $(CORE_DIR)/blit_surface_cluster.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c

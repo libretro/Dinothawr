@@ -40,10 +40,13 @@ namespace Blit
          int pix_width() const { return width * tilewidth; }
          int pix_height() const { return height * tileheight; }
 
-         const Surface* find_tile(unsigned layer, Pos pos) const;
-         const Surface* find_tile(const std::string& name, Pos pos) const;
-         Surface* find_tile(unsigned layer, Pos pos);
-         Surface* find_tile(const std::string& name, Pos pos);
+         /* The raw surface, not the C++ wrapper: callers read its rect
+          * and attributes and mutate it in place, and it lives in the
+          * cluster's storage. */
+         const blit_surface_t* find_tile(unsigned layer, Pos pos) const;
+         const blit_surface_t* find_tile(const std::string& name, Pos pos) const;
+         blit_surface_t* find_tile(unsigned layer, Pos pos);
+         blit_surface_t* find_tile(const std::string& name, Pos pos);
          const Layer* find_layer(const std::string& name) const;
          int find_layer_index(const std::string& name) const;
          Layer* find_layer(const std::string& name);

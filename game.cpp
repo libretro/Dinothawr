@@ -114,15 +114,17 @@ namespace Icy
          return surfs;
 
       {
-         std::vector<SurfaceCluster::Elem>& elems = layer->cluster.vec();
+         Blit::SurfaceCluster& cluster = layer->cluster;
          size_t i;
 
-         for (i = 0; i < elems.size(); i++)
+         for (i = 0; i < cluster.size(); i++)
          {
-            const char *found = elems[i].surf.attr(attr.c_str());
+            SurfaceCluster::Elem *elem = cluster.at(i);
+            const char *found = blit_attr_table_find(elem->surf.attribs,
+                  attr.c_str());
 
             if (val.empty() ? (found != NULL) : (found && val == found))
-               surfs.push_back(&elems[i]);
+               surfs.push_back(elem);
          }
       }
 
@@ -155,7 +157,7 @@ namespace Icy
 
       for (auto& block : goal_blocks)
       {
-         block->surf.active_alt(state);
+         blit_surface_set_active_alt(&block->surf, state.c_str(), 0);
 
          // Shift defrosted block same way player sprite is (16x17, etc), but only when defrost kicks in.
          if (won_frame_cnt >= 1 * frame_per_iter)
@@ -186,13 +188,13 @@ namespace Icy
    static bool is_game_won(const Blit::SurfaceCluster::Elem *a,
          const Blit::SurfaceCluster::Elem *b)
    {
-      return a->surf.rect().pos == b->surf.rect().pos;
+      return blit_pos_equal(a->surf.rect.pos, b->surf.rect.pos) != 0;
    }
 
    static bool sort_blocks(const SurfaceCluster::Elem *a,
          const SurfaceCluster::Elem *b)
    {
-      return a->surf.rect().pos < b->surf.rect().pos;
+      return blit_pos_less(a->surf.rect.pos, b->surf.rect.pos) != 0;
    }
 
    // Checks if all goals on floor and blocks are aligned with each other.
@@ -318,9 +320,9 @@ namespace Icy
       return Input::None;
    }
 
-   bool Game::is_offset_collision(Surface& surf, Pos offset)
+   bool Game::is_offset_collision(blit_surface_t& surf, Pos offset)
    {
-      Blit::Rect new_rect = surf.rect() + offset;
+      Blit::Rect new_rect = surf.rect + offset;
 
       // Always assume that the rect in question is inside a single tile.
       // This is needed as the dino sprite can be slightly larger than 16x16, but it's
@@ -328,12 +330,12 @@ namespace Icy
       new_rect.w = map.tile_width();
       new_rect.h = map.tile_height();
 
-      bool outside_grid = surf.rect().pos.x % map.tile_width() || surf.rect().pos.y % map.tile_height();
+      bool outside_grid = surf.rect.pos.x % map.tile_width() || surf.rect.pos.y % map.tile_height();
       if (outside_grid)
          throw logic_error("Offset collision check was performed outside tile grid.");
 
-      int current_x = surf.rect().pos.x / map.tile_width();
-      int current_y = surf.rect().pos.y / map.tile_height();
+      int current_x = surf.rect.pos.x / map.tile_width();
+      int current_y = surf.rect.pos.y / map.tile_height();
 
       int min_tile_x = new_rect.pos.x / map.tile_width();
       int max_tile_x = (new_rect.pos.x + new_rect.w - 1) / map.tile_width();
@@ -353,7 +355,7 @@ namespace Icy
    {
       Blit::Pos offset = input_to_offset(facing);
       Blit::Pos dir    = offset * blit_pos(map.tile_width(), map.tile_height());
-      Blit::Surface *tile   = map.find_tile("blocks", player.rect().pos + dir);
+      blit_surface_t *tile  = map.find_tile("blocks", player.rect().pos + dir);
 
       if (!tile)
          return;
@@ -380,9 +382,9 @@ namespace Icy
       player.active_alt(input_to_string(facing));
 
       Blit::Pos offset = input_to_offset(input);
-      if (!is_offset_collision(player, offset))
+      if (!is_offset_collision(player.raw(), offset))
       {
-         stepper = bind(&Game::tile_stepper, this, ref(player), offset);
+         stepper = bind(&Game::tile_stepper, this, ref(player.raw()), offset);
          begin_leg(offset.x ? map.tile_width() : map.tile_height());
          player_walking = true;
       }
@@ -399,7 +401,7 @@ namespace Icy
       leg_moved = 0;
    }
 
-   bool Game::tile_stepper(Surface& surf, Pos step_dir)
+   bool Game::tile_stepper(blit_surface_t& surf, Pos step_dir)
    {
       int tile_size = step_dir.x ? map.tile_width() : map.tile_height();
       int want;
@@ -415,7 +417,7 @@ namespace Icy
       if (want > tile_size)
          want = tile_size;
 
-      surf.rect() += (want - leg_moved) * step_dir;
+      surf.rect += (want - leg_moved) * step_dir;
       leg_moved    = want;
 
       if (!player_walking)
@@ -438,16 +440,16 @@ namespace Icy
       {
          is_sliding = false;
 
-         if (&surf != &player)
+         if (&surf != &player.raw())
             get_sfx().play_sfx("ice_bump", 0.25);
 
          return false;
       }
 
       //cerr << "Player: " << player.rect().pos << " Surf: " << surf->rect().pos << endl; 
-      Blit::Surface *surface  = map.find_tile("floor", surf.rect().pos);
-      const char *slip = surface ? surface->attr(
-            &surf == &player ? "slippery_player" : "slippery_block") : NULL;
+      blit_surface_t *surface = map.find_tile("floor", surf.rect.pos);
+      const char *slip = surface ? blit_attr_table_find(surface->attribs,
+            &surf == &player.raw() ? "slippery_player" : "slippery_block") : NULL;
       bool slippery = slip && std::strcmp(slip, "true") == 0;
 
       is_sliding = slippery;

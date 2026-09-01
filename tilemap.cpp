@@ -167,7 +167,7 @@ namespace Blit
             Blit::Surface surf = tiles[gid];
             surf.rect().pos = pos * blit_pos(tilewidth, tileheight);
 
-            layer.cluster.vec().push_back({surf, blit_pos_zero()});
+            layer.cluster.add(surf, blit_pos_zero());
 
             {
                const char *coll = surf.attr("collision");
@@ -215,20 +215,14 @@ namespace Blit
          find_tile("blocks", {tile.x * tilewidth, tile.y * tileheight});
    }
 
-   Surface* Tilemap::find_tile(unsigned layer_index, Pos offset)
+   blit_surface_t* Tilemap::find_tile(unsigned layer_index, Pos offset)
    {
       Blit::Tilemap::Layer& layer = m_layers.at(layer_index);
-      std::vector<Blit::SurfaceCluster::Elem>& elems = layer.cluster.vec();
-      size_t i;
-
-      for (i = 0; i < elems.size(); i++)
-         if ((elems[i].surf.rect().pos + elems[i].offset) == offset)
-            return &elems[i].surf;
-
-      return NULL;
+      SurfaceCluster::Elem *elem = layer.cluster.find(offset);
+      return elem ? &elem->surf : NULL;
    }
 
-   Surface* Tilemap::find_tile(const std::string& name, Pos pos)
+   blit_surface_t* Tilemap::find_tile(const std::string& name, Pos pos)
    {
       std::vector<Blit::Tilemap::Layer>::iterator layer = std::find_if(m_layers.begin(), m_layers.end(), [&name](const Layer& layer) {
                return Utils::tolower(layer.name) == name;
@@ -240,20 +234,14 @@ namespace Blit
       return find_tile(std::distance(m_layers.begin(), layer), pos);
    }
 
-   const Surface* Tilemap::find_tile(unsigned layer_index, Pos offset) const
+   const blit_surface_t* Tilemap::find_tile(unsigned layer_index, Pos offset) const
    {
       const Blit::Tilemap::Layer& layer = m_layers.at(layer_index);
-      const std::vector<Blit::SurfaceCluster::Elem>& elems = layer.cluster.vec();
-      size_t i;
-
-      for (i = 0; i < elems.size(); i++)
-         if ((elems[i].surf.rect().pos + elems[i].offset) == offset)
-            return &elems[i].surf;
-
-      return NULL;
+      const SurfaceCluster::Elem *elem = layer.cluster.find(offset);
+      return elem ? &elem->surf : NULL;
    }
 
-   const Surface* Tilemap::find_tile(const std::string& name, Pos pos) const
+   const blit_surface_t* Tilemap::find_tile(const std::string& name, Pos pos) const
    {
       auto layer = std::find_if(m_layers.begin(), m_layers.end(), [&name](const Layer& layer) {
                return Utils::tolower(layer.name) == name;
