@@ -50,6 +50,7 @@ SOURCES_C += \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_deflate.c \
 				 $(LIBRETRO_COMM_DIR)/streams/trans_stream_pipe.c \
+				 $(LIBRETRO_COMM_DIR)/string/rstrtod.c \
 				 $(LIBRETRO_COMM_DIR)/string/stdstring.c \
 				 $(LIBRETRO_COMM_DIR)/time/rtime.c \
 				 $(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c
