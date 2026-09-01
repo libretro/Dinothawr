@@ -19,7 +19,9 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 SOURCES_C :=
 
 SOURCES_C += $(CORE_DIR)/rpng_front.c
+SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
+SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_i16.c
 SOURCES_C += $(CORE_DIR)/audio/async_job.c
 
