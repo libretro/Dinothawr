@@ -6,9 +6,11 @@
 #include "blit_attr_table.h"
 #include "blit_alt_table.h"
 #include "blit_surface.h"
+#include "blit_render_target.h"
 
 #include <memory>
 #include <new>
+#include <cstring>
 #include <vector>
 #include <map>
 #include <functional>
@@ -233,36 +235,99 @@ namespace Blit
     * retro_run - the core's only worker threads decode audio. */
    SurfaceCache& surface_cache();
 
+   /* A value-semantics shim over blit_render_target_t, for the engine
+    * code that still holds one by value. Everything forwards. */
    class RenderTarget
    {
       public:
-         RenderTarget() : rect(blit_rect_zero())
+         RenderTarget() { blit_render_target_init(&t); }
+
+         RenderTarget(int width, int height)
          {
+            if (!blit_render_target_init_size(&t, width, height))
+               throw std::bad_alloc();
          }
 
-         RenderTarget(int width, int height);
+         /* A target owns its pixels outright, so a copy is a deep copy.
+          * Only the move is on any hot path - ui_target is assigned from
+          * a temporary when a game loads. */
+         RenderTarget(const RenderTarget& other)
+         {
+            if (!blit_render_target_init_size(&t, other.t.rect.w,
+                     other.t.rect.h))
+               throw std::bad_alloc();
+            if (other.t.buffer)
+               std::memcpy(t.buffer, other.t.buffer,
+                     other.t.count * sizeof(Pixel));
+            t.rect = other.t.rect;
+         }
+
+         RenderTarget& operator=(const RenderTarget& other)
+         {
+            if (this != &other)
+            {
+               RenderTarget copy(other);
+               *this = std::move(copy);
+            }
+            return *this;
+         }
+
+         RenderTarget(RenderTarget&& other) : t(other.t)
+         { blit_render_target_init(&other.t); }
+
+         RenderTarget& operator=(RenderTarget&& other)
+         {
+            if (this != &other)
+            {
+               blit_render_target_release(&t);
+               t = other.t;
+               blit_render_target_init(&other.t);
+            }
+            return *this;
+         }
+
+         ~RenderTarget() { blit_render_target_release(&t); }
 
          Surface convert_surface();
 
-         const Pixel* buffer() const;
-         Pixel* pixel_raw(Pos pos);
-         Pixel* pixel_raw_no_offset(Pos pos);
+         const Pixel* buffer() const { return t.buffer; }
 
-         int width() const;
-         int height() const;
+         Pixel* pixel_raw(Pos pos)
+         {
+            Pixel *pixel = blit_render_target_pixel_raw(&t, pos);
+            if (!pixel)
+               pixel_out_of_bounds(blit_pos_sub(pos, t.rect.pos));
+            return pixel;
+         }
 
-         void clear(Pixel pix);
+         Pixel* pixel_raw_no_offset(Pos pos)
+         {
+            Pixel *pixel = blit_render_target_pixel_raw_no_offset(&t, pos);
+            if (!pixel)
+               pixel_out_of_bounds(pos);
+            return pixel;
+         }
 
-         void camera_move(Pos pos);
-         void camera_set(Pos pos);
-         Pos camera_pos() const;
+         int width() const { return t.rect.w; }
+         int height() const { return t.rect.h; }
 
-         void blit(const Surface& surf, Rect subrect);
-         void blit_offset(const Surface& surf, Rect subrect, Pos offset);
+         void clear(Pixel pix) { blit_render_target_clear(&t, pix); }
+
+         void camera_move(Pos pos) { t.rect.pos += pos; }
+         void camera_set(Pos pos) { t.rect.pos = pos; }
+         Pos camera_pos() const { return t.rect.pos; }
+
+         void blit(const Surface& surf, Rect subrect)
+         { blit_render_target_blit(&t, &surf.raw(), subrect); }
+
+         void blit_offset(const Surface& surf, Rect subrect, Pos offset)
+         { blit_render_target_blit_offset(&t, &surf.raw(), subrect, offset); }
 
       private:
-         std::vector<Pixel> m_buffer;
-         Rect rect;
+         /* Always throws; never returns. */
+         void pixel_out_of_bounds(Pos pos) const;
+
+         blit_render_target_t t;
    };
 }
 
