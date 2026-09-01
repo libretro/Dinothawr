@@ -1,4 +1,5 @@
 #include "font.hpp"
+#include <new>
 #include <cstring>
 #include "xml.hpp"
 #include "utils.hpp"
@@ -9,16 +10,77 @@ using namespace std;
 
 namespace Blit
 {
-   Font::Font() : glyphwidth(0), glyphheight(0)
+   /* The glyph slots are raw C surfaces, so they need initialising by
+    * hand where the Surface array used to do it in its constructors. */
+   void Font::clear_glyphs()
    {
-      std::memset(surf_present, 0, sizeof(surf_present));
+      unsigned i;
+      for (i = 0; i < 256; i++)
+      {
+         blit_surface_init(&surf_map[i]);
+         surf_present[i] = false;
+      }
    }
 
-   Font::Font(const string& font)
+   Font::Font() : glyphwidth(0), glyphheight(0)
+   {
+      clear_glyphs();
+   }
+
+   Font::Font(const Font& other)
+      : glyphwidth(other.glyphwidth), glyphheight(other.glyphheight)
+   {
+      unsigned i;
+      for (i = 0; i < 256; i++)
+      {
+         surf_map[i]     = other.surf_map[i];
+         surf_present[i] = other.surf_present[i];
+         if (surf_present[i])
+            blit_surface_retain(&surf_map[i]);
+      }
+   }
+
+   Font& Font::operator=(const Font& other)
+   {
+      if (this != &other)
+      {
+         unsigned i;
+
+         /* Retain before release: assigning from a Font sharing our
+          * glyphs would otherwise free them first. */
+         for (i = 0; i < 256; i++)
+            if (other.surf_present[i])
+               blit_surface_retain(&other.surf_map[i]);
+
+         for (i = 0; i < 256; i++)
+            if (surf_present[i])
+               blit_surface_release(&surf_map[i]);
+
+         for (i = 0; i < 256; i++)
+         {
+            surf_map[i]     = other.surf_map[i];
+            surf_present[i] = other.surf_present[i];
+         }
+
+         glyphwidth  = other.glyphwidth;
+         glyphheight = other.glyphheight;
+      }
+      return *this;
+   }
+
+   Font::~Font()
+   {
+      unsigned i;
+      for (i = 0; i < 256; i++)
+         if (surf_present[i])
+            blit_surface_release(&surf_map[i]);
+   }
+
+   Font::Font(const string& font) : glyphwidth(0), glyphheight(0)
    {
       string dir = Utils::basedir(font);
 
-      std::memset(surf_present, 0, sizeof(surf_present));
+      clear_glyphs();
 
       Blit::Xml::Document doc;
       if (!doc.load_file(font.c_str()))
@@ -45,17 +107,23 @@ namespace Blit
       {
          for (int x = 0; x < width; x++, start_ascii++)
          {
-            surf_map[(unsigned char)start_ascii] = surf.sub(
-                  blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
-                     glyphwidth, glyphheight));
+            {
+               unsigned char slot = (unsigned char)start_ascii;
+               Surface glyph = surf.sub(
+                     blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
+                        glyphwidth, glyphheight));
 
-            surf_map[(unsigned char)start_ascii].ignore_camera(true);
-            surf_present[(unsigned char)start_ascii] = true;
+               glyph.ignore_camera(true);
+
+               surf_map[slot] = glyph.raw();
+               blit_surface_retain(&surf_map[slot]);
+               surf_present[slot] = true;
+            }
          }
       }
    }
 
-   const Surface& Font::surface(char c) const
+   const blit_surface_t& Font::surface(char c) const
    {
       if (!surf_present[(unsigned char)c])
          throw logic_error(Utils::join("Character '", c, "' not found in font."));
@@ -67,8 +135,8 @@ namespace Blit
    {
       unsigned i;
       for (i = 0; i < 256; i++)
-         if (surf_present[i])
-            surf_map[i].refill_color(pix);
+         if (surf_present[i] && !blit_surface_refill_color(&surf_map[i], pix))
+            throw std::bad_alloc();
    }
 
    void Font::render_msg(RenderTarget& target, const string& str, int x, int y,
@@ -83,8 +151,8 @@ namespace Blit
          x -= Font::adjust_x(*line, dir);
          for (std::string::iterator c = line->begin(); c!=line->end(); c++)
          {
-            const Surface& surf = surface(*c);
-            target.blit_offset(surf, blit_rect_zero(), blit_pos(x, y));
+            target.blit_offset(&surface(*c), blit_rect_zero(),
+                  blit_pos(x, y));
             x += glyphwidth;
          }
          y += glyphheight + newline_offset;

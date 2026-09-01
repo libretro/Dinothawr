@@ -10,9 +10,19 @@ namespace Blit
    {
       public:
          Font();
+
+         /* The glyph slots are raw C surfaces, so copying a Font has to
+          * retain them: FontCluster builds one and pushes it into a
+          * vector, and the default copy would hand the vector pointers
+          * the original's destructor is about to release. */
+         Font(const Font& other);
+         Font& operator=(const Font& other);
+         ~Font();
          Font(const std::string& font);
 
-         const Surface& surface(char c) const;
+         /* The glyph for @c. Raw rather than the C++ wrapper: the
+          * glyphs live in this array, and the blit takes one directly. */
+         const blit_surface_t& surface(char c) const;
          Pos glyph_size() const { return blit_pos(glyphwidth, glyphheight); }
 
          enum RenderAlignment
@@ -28,12 +38,14 @@ namespace Blit
          void set_color(Pixel pix);
 
       private:
+         void clear_glyphs();
+
          /* Indexed by character rather than keyed by one: a font has at
           * most 256 glyphs, the lookup runs per character rendered, and
           * a flat array makes it an index instead of a tree walk. The
           * present flags say which slots were filled. */
-         Surface surf_map[256];
-         bool    surf_present[256];
+         blit_surface_t surf_map[256];
+         bool           surf_present[256];
          int glyphwidth, glyphheight;
          int adjust_x(const std::string& str, Font::RenderAlignment dir) const;
    };
