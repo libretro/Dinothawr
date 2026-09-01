@@ -2,6 +2,7 @@
 #define TILEMAP_HPP__
 
 #include "surface.hpp"
+#include "blit_tile_set.h"
 #include "xml.hpp"
 
 #include <string>
@@ -64,9 +65,9 @@ namespace Blit
          int width, height, tilewidth, tileheight;
          std::string dir;
 
-         void add_tileset(std::map<unsigned, Surface>& tiles,
+         void add_tileset(blit_tile_set_t *tiles,
                Blit::Xml::Node node);
-         void add_layer(std::map<unsigned, Surface>& tiles,
+         void add_layer(blit_tile_set_t *tiles,
                Blit::Xml::Node node, int tilewidth, int tileheight);
 
          std::map<std::string, std::string> get_attributes(Blit::Xml::Node, const std::string& child) const;

@@ -28,12 +28,18 @@ namespace Blit
       if (!width || !height || !tilewidth || !tileheight)
          throw std::logic_error("Tilemap is malformed.");
 
-      std::map<unsigned, Surface> tiles;
+      blit_tile_set_t *tiles = blit_tile_set_new();
+
+      if (!tiles)
+         throw std::bad_alloc();
+
       for (auto set = map.child("tileset"); set; set = set.next_sibling("tileset"))
          add_tileset(tiles, set);
 
       for (auto layer = map.child("layer"); layer; layer = layer.next_sibling("layer"))
          add_layer(tiles, layer, tilewidth, tileheight);
+
+      blit_tile_set_free(tiles);
    }
 
    std::map<std::string, std::string> Tilemap::get_attributes(Blit::Xml::Node parent, const std::string& child) const
@@ -50,7 +56,7 @@ namespace Blit
       return attrs;
    }
 
-   void Tilemap::add_tileset(std::map<unsigned, Surface>& tiles, Blit::Xml::Node node)
+   void Tilemap::add_tileset(blit_tile_set_t *tiles, Blit::Xml::Node node)
    {
       int first_gid  = node.attribute("firstgid").as_int();
       int id_cnt     = 0;
@@ -98,12 +104,17 @@ namespace Blit
          for (; id_cnt < count; id_cnt++)
          {
             int id = first_gid + id_cnt;
-            tiles[id] = surface_cache().from_animation(path, id_cnt);
-            if (tiles[id].rect().w != tilewidth || tiles[id].rect().h != tileheight)
+            Surface tile = surface_cache().from_animation(path, id_cnt);
+
+            if (tile.rect().w != tilewidth || tile.rect().h != tileheight)
                throw std::logic_error("Tilemap geometry does not correspond with image values.");
+
             for (std::map<std::string, std::string>::const_iterator ga =
                   global_attr.begin(); ga != global_attr.end(); ++ga)
-               tiles[id].set_attr(ga->first.c_str(), ga->second.c_str());
+               tile.set_attr(ga->first.c_str(), ga->second.c_str());
+
+            if (!blit_tile_set_put(tiles, id, &tile.raw()))
+               throw std::bad_alloc();
          }
       }
       else
@@ -118,10 +129,14 @@ namespace Blit
             for (int x = 0; x < width; x += tilewidth, id_cnt++)
             {
                int id = first_gid + id_cnt;
-               tiles[id] = surf.sub({{x, y}, tilewidth, tileheight});
+               Surface tile = surf.sub({{x, y}, tilewidth, tileheight});
+
                for (std::map<std::string, std::string>::const_iterator ga =
                      global_attr.begin(); ga != global_attr.end(); ++ga)
-                  tiles[id].set_attr(ga->first.c_str(), ga->second.c_str());
+                  tile.set_attr(ga->first.c_str(), ga->second.c_str());
+
+               if (!blit_tile_set_put(tiles, id, &tile.raw()))
+                  throw std::bad_alloc();
             }
          }
       }
@@ -137,15 +152,30 @@ namespace Blit
          auto itr = attrs.find("sprite");
 
          if (itr != attrs.end())
-            tiles[id] = surface_cache().from_sprite(Utils::join(dir, "/", itr->second));
+         {
+            Surface sprite_tile = surface_cache().from_sprite(
+                  Utils::join(dir, "/", itr->second));
 
-         for (std::map<std::string, std::string>::const_iterator a =
-               attrs.begin(); a != attrs.end(); ++a)
-            tiles[id].set_attr(a->first.c_str(), a->second.c_str());
+            if (!blit_tile_set_put(tiles, id, &sprite_tile.raw()))
+               throw std::bad_alloc();
+         }
+
+         {
+            blit_surface_t *tile = blit_tile_set_get(tiles, id);
+            std::map<std::string, std::string>::const_iterator a;
+
+            if (!tile)
+               throw std::logic_error("Tile attributes name an id no tileset declared.");
+
+            for (a = attrs.begin(); a != attrs.end(); ++a)
+               if (!blit_surface_set_attr(tile, a->first.c_str(),
+                        a->second.c_str()))
+                  throw std::bad_alloc();
+         }
       }
    }
 
-   void Tilemap::add_layer(std::map<unsigned, Surface>& tiles, Blit::Xml::Node node,
+   void Tilemap::add_layer(blit_tile_set_t *tiles, Blit::Xml::Node node,
          int tilewidth, int tileheight)
    {
       Layer layer;
@@ -164,16 +194,27 @@ namespace Blit
          unsigned gid = Utils::stoi(gid_str);
          if (gid)
          {
-            Blit::Surface surf = tiles[gid];
-            surf.rect().pos = pos * blit_pos(tilewidth, tileheight);
+            blit_surface_t *tile = blit_tile_set_get(tiles, gid);
+            blit_surface_t surf;
 
-            layer.cluster.add(surf, blit_pos_zero());
+            if (!tile)
+               throw std::logic_error("Layer names a tile id no tileset declared.");
+
+            surf = *tile;
+            blit_surface_retain(&surf);
+            surf.rect.pos = pos * blit_pos(tilewidth, tileheight);
+
+            layer.cluster.add(&surf, blit_pos_zero());
 
             {
-               const char *coll = surf.attr("collision");
+               const char *coll = blit_attr_table_find(surf.attribs,
+                     "collision");
                if (coll && std::strcmp(coll, "true") == 0)
                   collisions.insert(pos);
             }
+
+            /* The cluster took its own reference. */
+            blit_surface_release(&surf);
          }
 
          index++;

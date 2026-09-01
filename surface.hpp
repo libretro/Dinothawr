@@ -193,8 +193,11 @@ namespace Blit
          ~SurfaceCluster() { blit_surface_cluster_release(&c); }
 
          void add(const Surface& surf, Pos offset)
+         { add(&surf.raw(), offset); }
+
+         void add(const blit_surface_t *surf, Pos offset)
          {
-            if (!blit_surface_cluster_add(&c, &surf.raw(), offset))
+            if (!blit_surface_cluster_add(&c, surf, offset))
                throw std::bad_alloc();
          }
 
