@@ -1,4 +1,5 @@
 #include "font.hpp"
+#include <cstring>
 #include "xml.hpp"
 #include "utils.hpp"
 
@@ -8,11 +9,16 @@ using namespace std;
 
 namespace Blit
 {
-   Font::Font() : glyphwidth(0), glyphheight(0) {}
+   Font::Font() : glyphwidth(0), glyphheight(0)
+   {
+      std::memset(surf_present, 0, sizeof(surf_present));
+   }
 
    Font::Font(const string& font)
    {
       string dir = Utils::basedir(font);
+
+      std::memset(surf_present, 0, sizeof(surf_present));
 
       Blit::Xml::Document doc;
       if (!doc.load_file(font.c_str()))
@@ -39,27 +45,30 @@ namespace Blit
       {
          for (int x = 0; x < width; x++, start_ascii++)
          {
-            surf_map[start_ascii] = surf.sub(blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
-                  glyphwidth, glyphheight));
+            surf_map[(unsigned char)start_ascii] = surf.sub(
+                  blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
+                     glyphwidth, glyphheight));
 
-            surf_map[start_ascii].ignore_camera(true);
+            surf_map[(unsigned char)start_ascii].ignore_camera(true);
+            surf_present[(unsigned char)start_ascii] = true;
          }
       }
    }
 
    const Surface& Font::surface(char c) const
    {
-      std::map<char, Surface>::const_iterator itr = surf_map.find(c);
-      if (itr == surf_map.end())
+      if (!surf_present[(unsigned char)c])
          throw logic_error(Utils::join("Character '", c, "' not found in font."));
 
-      return itr->second;
+      return surf_map[(unsigned char)c];
    }
 
    void Font::set_color(Pixel pix)
    {
-      for (std::map<char, Surface>::iterator itr = surf_map.begin(); itr != surf_map.end(); itr++)
-         itr->second.refill_color(pix);
+      unsigned i;
+      for (i = 0; i < 256; i++)
+         if (surf_present[i])
+            surf_map[i].refill_color(pix);
    }
 
    void Font::render_msg(RenderTarget& target, const string& str, int x, int y,

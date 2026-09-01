@@ -12,7 +12,7 @@ namespace Blit
          Font();
          Font(const std::string& font);
 
-         const Surface& surface(char c) const; 
+         const Surface& surface(char c) const;
          Pos glyph_size() const { return blit_pos(glyphwidth, glyphheight); }
 
          enum RenderAlignment
@@ -28,7 +28,12 @@ namespace Blit
          void set_color(Pixel pix);
 
       private:
-         std::map<char, Surface> surf_map;
+         /* Indexed by character rather than keyed by one: a font has at
+          * most 256 glyphs, the lookup runs per character rendered, and
+          * a flat array makes it an index instead of a tree walk. The
+          * present flags say which slots were filled. */
+         Surface surf_map[256];
+         bool    surf_present[256];
          int glyphwidth, glyphheight;
          int adjust_x(const std::string& str, Font::RenderAlignment dir) const;
    };
