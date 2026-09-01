@@ -16,7 +16,13 @@ namespace Icy
          function<void (const void*, unsigned, unsigned, size_t)> video_cb)
       : save(chapters), dir(Utils::basedir(path_game)),
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
-      m_input_cb(input_cb), m_video_cb(video_cb)
+      m_input_cb(input_cb), m_video_cb(video_cb),
+      chap_select(0), level_select(0),
+      old_pressed_menu_left(false), old_pressed_menu_right(false),
+      old_pressed_menu_up(false), old_pressed_menu_down(false),
+      old_pressed_menu_ok(false), old_pressed_menu(false),
+      old_pressed_reset(false),
+      slide_cnt(0), slide_end(1)
    {
       Blit::Xml::Document doc;
 
@@ -51,7 +57,16 @@ namespace Icy
 
    }
 
-   GameManager::GameManager() : save(chapters), m_current_chap(0), m_current_level(0), m_game_state(State::Game) {}
+   GameManager::GameManager()
+      : save(chapters),
+      m_current_chap(0), m_current_level(0), m_game_state(State::Game),
+      chap_select(0), level_select(0),
+      old_pressed_menu_left(false), old_pressed_menu_right(false),
+      old_pressed_menu_up(false), old_pressed_menu_down(false),
+      old_pressed_menu_ok(false), old_pressed_menu(false),
+      old_pressed_reset(false),
+      slide_cnt(0), slide_end(1)
+   {}
 
    void GameManager::init_menu_sprite(Blit::Xml::Node game_node)
    {

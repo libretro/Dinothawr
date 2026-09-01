@@ -92,6 +92,11 @@ namespace Icy
             float gain;
          };
          void init(const std::vector<Track>& tracks);
+
+         /* Releases everything the int16 path is holding, including a
+          * decode still in flight. Call before the mixer it feeds goes
+          * away. */
+         void deinit();
          void step(Audio::Mixer& mixer);
 
       private:
