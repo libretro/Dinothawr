@@ -309,6 +309,8 @@ static void check_variables()
       update_variables();
 }
 
+static void show_message(const char *text);
+
 void retro_run(void)
 {
    check_variables();
@@ -321,7 +323,25 @@ void retro_run(void)
     * retro_run more often, which speeds the audio up too - the old async
     * audio callback pulled samples at the device rate regardless of
     * emulation speed, so fast-forward never sped up sound. */
-   game->iterate();
+   /* Same reason retro_load_game catches: an exception leaving a
+    * libretro entry point terminates the frontend. The ones that can
+    * reach here are assertions about level data - a sprite face that
+    * does not exist, goal squares and blocks that do not match - so a
+    * bad level would take the frontend down mid-play. Report and ask to
+    * be unloaded instead, which loses the session and nothing else. */
+   try
+   {
+      game->iterate();
+   }
+   catch (const std::exception& e)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "Dinothawr: %s\n", e.what());
+
+      show_message("Dinothawr: level data is broken, stopping");
+      environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+      return;
+   }
 
    icy_bgm_step(icy_bgm());
    audio_callback();
