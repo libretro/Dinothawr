@@ -30,6 +30,23 @@ teardown is exercised. A single load hides anything that only repeats.
 The same two invocations under ASan/UBSan/LSan and under TSan are what
 the core is swept with before a commit.
 
+## Menu navigation
+
+`INPUT=menu` swaps the scripted walk for one that drives the front end:
+short taps that step the level and chapter selection, OK to enter a
+level, START to come back out.
+
+The default walk holds each direction long enough to move the player,
+which in the menu runs the selection to one end and leaves it there. So
+a default run draws the menu but never its transitions - the slide
+animation, the chapter change, the locked-chapter path. Those are only
+reached under `INPUT=menu`, and it produces a different frame hash
+because of it.
+
+Run both. The default covers gameplay, `INPUT=menu` covers the front
+end, and combined with `SRAM_LOAD` it covers the front end with levels
+already cleared, which is a third set of states again.
+
 ## The save
 
 The game's save is SRAM, not the serialize entry points - those return

@@ -126,6 +126,7 @@ static bool env_cb(unsigned cmd, void *data)
 static uint64_t g_video_hash = 1469598103934665603ULL;
 
 static int g_nohash;
+static int g_input_menu;
 
 static void video_cb(const void *data, unsigned w, unsigned h, size_t pitch)
 {
@@ -176,6 +177,39 @@ static int16_t input_state_cb(unsigned port, unsigned device,
    (void)index;
    if (port != 0 || device != RETRO_DEVICE_JOYPAD)
       return 0;
+
+   /* INPUT=menu drives the front end instead of the game: short taps
+    * that step the level and chapter selection, OK to enter a level and
+    * START to come back out. The default walk holds directions long
+    * enough to move the player, which in the menu just runs the
+    * selection to one end and leaves it there - so the menu's own
+    * transitions, its slide animation and its locked-chapter path were
+    * never reached by a default run. */
+   if (g_input_menu)
+   {
+      unsigned phase = g_cur_frame % 400;
+
+      switch (id)
+      {
+         case RETRO_DEVICE_ID_JOYPAD_RIGHT:
+            return phase < 60 && (phase % 10) < 2;
+         case RETRO_DEVICE_ID_JOYPAD_DOWN:
+            return phase >= 80 && phase < 140 && (phase % 10) < 2;
+         case RETRO_DEVICE_ID_JOYPAD_LEFT:
+            return phase >= 160 && phase < 200 && (phase % 10) < 2;
+         case RETRO_DEVICE_ID_JOYPAD_UP:
+            return phase >= 220 && phase < 260 && (phase % 10) < 2;
+         case RETRO_DEVICE_ID_JOYPAD_A:
+            /* Enter a level, mess about briefly, then come back. */
+            return phase == 280;
+         case RETRO_DEVICE_ID_JOYPAD_START:
+            return phase == 380;
+         default:
+            break;
+      }
+      return 0;
+   }
+
    /* Scripted walk: hold a direction for a while, tap A, repeat. */
    switch (id)
    {
@@ -237,6 +271,10 @@ int main(int argc, char **argv)
    }
 
    g_nohash = getenv("NOHASH") != NULL;
+   {
+      const char *mode = getenv("INPUT");
+      g_input_menu = mode && strcmp(mode, "menu") == 0;
+   }
    g_sysdir = argv[2];
    g_frames = (unsigned)strtoul(argv[3], NULL, 10);
 
