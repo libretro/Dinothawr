@@ -29,6 +29,7 @@ SOURCES_C += $(CORE_DIR)/icy_edge.c
 SOURCES_C += $(CORE_DIR)/icy_input.c
 SOURCES_C += $(CORE_DIR)/icy_leg.c
 SOURCES_C += $(CORE_DIR)/icy_collide.c
+SOURCES_C += $(CORE_DIR)/icy_anim.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c

@@ -1,5 +1,6 @@
 #include "game.hpp"
 #include "icy_collide.h"
+#include "icy_anim.h"
 #include <cstring>
 #include "utils.hpp"
 #include <iostream>
@@ -297,7 +298,7 @@ namespace Icy
       else if (stepper == Stepper::None)
       {
          frame_cnt = 0;
-         set_player_alt_index(0);
+         set_player_alt_index(ICY_ANIM_STILL);
       }
 
       if (stepper != Stepper::None && player_walking)
@@ -311,18 +312,11 @@ namespace Icy
    {
       frame_cnt++;
 
-      // Animation from index 1 to 4, "neutral position" in 0. "Slippery" animations in 5 and 6.
-      unsigned anim_index;
-      /* frame_cnt counts ticks, so the divisor is the tick count that
+      /* frame_cnt counts ticks, so the period is the tick count that
        * spans what used to be 10 frames - the cycle changes at the same
        * wall-clock moments at 60 Hz and at 240. */
-      unsigned period = frames_to_ticks(anim_frames_per_step);
-      if (is_sliding)
-         anim_index = (frame_cnt / period) % 2 + 5;
-      else
-         anim_index = (frame_cnt / period) % 4 + 1;
-
-      set_player_alt_index(anim_index);
+      set_player_alt_index(icy_anim_moving(frame_cnt,
+               frames_to_ticks(anim_frames_per_step), is_sliding));
    }
 
    void Game::update_triggers()
@@ -376,7 +370,7 @@ namespace Icy
          begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
          stepper_cnt = 0;
          player_walking = false;
-         set_player_alt_index(0);
+         set_player_alt_index(ICY_ANIM_STILL);
          icy_sfx_play(icy_sfx(), "dino_push", 1.0f);
          pushes++;
       }
@@ -413,8 +407,8 @@ namespace Icy
 
       if (!player_walking)
       {
-         unsigned alt = stepper_cnt < frames_to_ticks(push_anim_frames) ? 7 : 0;
-         set_player_alt_index(alt);
+         set_player_alt_index(icy_anim_pushing(stepper_cnt,
+                  frames_to_ticks(push_anim_frames)));
          stepper_cnt++;
       }
 
