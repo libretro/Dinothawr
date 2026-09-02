@@ -8,6 +8,7 @@
 #include "blit_tilemap.h"
 #include "icy_menu_slide.h"
 #include "icy_edge.h"
+#include "icy_input.h"
 #include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
@@ -59,16 +60,18 @@ namespace Icy
     * which is what keeps the default rate bit-for-bit what it was. */
    unsigned frames_to_ticks(unsigned frames60);
 
+   /* The C enum under a C++ name, so the values stay in one place and a
+    * cast between them is an identity. */
    enum class Input : unsigned
    {
-      Up = 0,
-      Down,
-      Left,
-      Right,
-      Push,
-      Menu,
-      Reset,
-      None
+      Up    = ICY_INPUT_UP,
+      Down  = ICY_INPUT_DOWN,
+      Left  = ICY_INPUT_LEFT,
+      Right = ICY_INPUT_RIGHT,
+      Push  = ICY_INPUT_PUSH,
+      Menu  = ICY_INPUT_MENU,
+      Reset = ICY_INPUT_RESET,
+      None  = ICY_INPUT_NONE
    };
 
    class CameraManager
@@ -187,9 +190,6 @@ namespace Icy
          unsigned chapter;
          unsigned level;
 
-         static Blit::Pos input_to_offset(Input input);
-         std::string input_to_string(Input input);
-         Input string_to_input(const std::string& dir);
 
          std::vector<blit_cluster_elem_t*> get_tiles_with_attr(const std::string& layer,
                const std::string& attr, const std::string& val = "");

@@ -119,7 +119,7 @@ namespace Icy
 
       player.rect.pos = blit_pos(x * blit_tilemap_tile_width(map), y * blit_tilemap_tile_height(map));
       player_off = blit_pos(off_x, off_y);
-      facing = string_to_input(face);
+      facing = (Input)icy_input_from_face(face.c_str());
       set_player_alt(face);
    }
 
@@ -339,39 +339,6 @@ namespace Icy
          move_if_no_collision(Input::Right);
    }
 
-   string Game::input_to_string(Input input)
-   {
-      switch (input)
-      {
-         case Input::Up:    return "up";
-         case Input::Left:  return "left";
-         case Input::Right: return "right";
-         case Input::Down:  return "down";
-         default:           return "";
-      }
-   }
-
-   Blit::Pos Game::input_to_offset(Input input)
-   {
-      switch (input)
-      {
-         case Input::Up:    return blit_pos(0, -1);
-         case Input::Left:  return blit_pos(-1, 0);
-         case Input::Right: return blit_pos(1, 0);
-         case Input::Down:  return blit_pos(0, 1);
-         default:           return blit_pos_zero();
-      }
-   }
-
-   Input Game::string_to_input(const string& dir)
-   {
-      if (dir == "up") return Input::Up;
-      if (dir == "down") return Input::Down;
-      if (dir == "left") return Input::Left;
-      if (dir == "right") return Input::Right;
-      return Input::None;
-   }
-
    bool Game::is_offset_collision(blit_surface_t& surf, Pos offset)
    {
       Blit::Rect new_rect = surf.rect + offset;
@@ -405,7 +372,7 @@ namespace Icy
 
    void Game::push_block()
    {
-      Blit::Pos offset = input_to_offset(facing);
+      Blit::Pos offset = icy_input_offset((enum icy_input)facing);
       Blit::Pos dir    = offset * blit_pos(blit_tilemap_tile_width(map), blit_tilemap_tile_height(map));
       blit_surface_t *tile  = blit_tilemap_find_tile(map, "blocks", player.rect.pos + dir);
 
@@ -431,9 +398,9 @@ namespace Icy
    void Game::move_if_no_collision(Input input)
    {
       facing = input;
-      set_player_alt(input_to_string(facing));
+      set_player_alt(icy_input_face((enum icy_input)facing));
 
-      Blit::Pos offset = input_to_offset(input);
+      Blit::Pos offset = icy_input_offset((enum icy_input)input);
       if (!is_offset_collision(player, offset))
       {
          stepper = bind(&Game::tile_stepper, this, ref(player), offset);
