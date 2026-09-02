@@ -403,6 +403,7 @@ namespace Icy
 
       private:
          void init_menu_surfaces();
+         void release_owned();
          void init_menu(const std::string& title);
          void init_menu_sprite(rxml_node_t* game_node);
          void init_level(unsigned chapter, unsigned level);

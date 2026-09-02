@@ -101,6 +101,13 @@ namespace Icy
       icy_menu_slide_init(&slide);
       init_menu_surfaces();
 
+      /* A throw out of a constructor skips the destructor, so anything
+       * this body has already taken has to be released by hand. Every
+       * asset load below can fail on a broken install, and until
+       * retro_load_game started catching them a failure took the
+       * frontend down and the leak did not matter. */
+      try
+      {
       xml_doc doc;
 
       if (!doc.load(path_game.c_str()))
@@ -156,7 +163,27 @@ namespace Icy
       if (!blit_render_target_init_size(&ui_target, Game::fb_width,
                Game::fb_height))
          throw std::bad_alloc();
+      }
+      catch (...)
+      {
+         release_owned();
+         throw;
+      }
+   }
 
+   /* What the destructor releases, so a failed construction can release
+    * it too. */
+   void GameManager::release_owned()
+   {
+      blit_font_cluster_free(font);
+      font = NULL;
+      blit_render_target_release(&target);
+      blit_render_target_release(&ui_target);
+      blit_surface_release(&lock_sprite);
+      blit_surface_release(&level_complete);
+      blit_surface_release(&level_select_bg);
+      blit_surface_release(&end_credit_bg);
+      blit_surface_release(&game_bg);
    }
 
    GameManager::GameManager()
@@ -186,14 +213,7 @@ namespace Icy
 
    GameManager::~GameManager()
    {
-      blit_font_cluster_free(font);
-      blit_render_target_release(&target);
-      blit_render_target_release(&ui_target);
-      blit_surface_release(&lock_sprite);
-      blit_surface_release(&level_complete);
-      blit_surface_release(&level_select_bg);
-      blit_surface_release(&end_credit_bg);
-      blit_surface_release(&game_bg);
+      release_owned();
    }
 
    void GameManager::init_menu_sprite(rxml_node_t *game_node)

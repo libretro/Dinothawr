@@ -374,6 +374,30 @@ void retro_reset(void)
    copy(data.begin(), data.end(), game_data);
 }
 
+/* Both message interfaces, so a failure is visible on old frontends
+ * too. */
+static void show_message(const char *text)
+{
+   unsigned msg_interface_version = 0;
+
+   environ_cb(RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION,
+         &msg_interface_version);
+
+   if (msg_interface_version >= 1)
+   {
+      struct retro_message_ext msg = {
+         text, 3000, 3, RETRO_LOG_ERROR,
+         RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION, -1
+      };
+      environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
+   }
+   else
+   {
+      struct retro_message msg = { text, 180 };
+      environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
+   }
+}
+
 bool retro_load_game(const struct retro_game_info* info)
 {
    /* The core sets SET_SUPPORT_NO_GAME, and a frontend starting it with
@@ -495,7 +519,25 @@ bool retro_load_game(const struct retro_game_info* info)
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
-   load_game(game_path);
+   /* Every failure below the frontend boundary is an exception, and
+    * nothing between here and it catches. Letting one out of
+    * retro_load_game terminates the frontend rather than failing the
+    * load, so this is where they stop: report and return false, which
+    * is what a core is supposed to do with content it cannot read. */
+   try
+   {
+      load_game(game_path);
+   }
+   catch (const std::exception& e)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "Dinothawr: failed to load: %s\n",
+               e.what());
+
+      show_message("Dinothawr: failed to load game files");
+      game.reset();
+      return false;
+   }
 
    /* Audio is now produced synchronously from retro_run (no async audio
     * callback), so the mixers are simply always enabled while a game is
