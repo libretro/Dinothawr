@@ -1,7 +1,10 @@
 #ifndef GAME_HPP__
 #define GAME_HPP__
 
-#include "surface_cluster.hpp"
+#include "blit.hpp"
+#include "cache.hpp"
+
+#include <vector>
 #include "blit_tilemap.h"
 #include <map>
 #include "blit_font.h"

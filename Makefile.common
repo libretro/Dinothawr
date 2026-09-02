@@ -8,7 +8,6 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 	$(CORE_DIR)/game_manager.cpp \
 	$(CORE_DIR)/libretro.cpp \
 	$(CORE_DIR)/sfx_manager.cpp \
-	$(CORE_DIR)/surface_cluster.cpp \
 
 SOURCES_C :=
 
