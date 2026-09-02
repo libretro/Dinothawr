@@ -6,6 +6,7 @@
 
 #include <vector>
 #include "blit_tilemap.h"
+#include "icy_menu_slide.h"
 #include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
@@ -419,14 +420,7 @@ namespace Icy
 
          Blit::Pos menu_slide_dir;
 
-         /* The slide used to be slide_end applications of menu_slide_dir,
-          * one per tick. It is now a total displacement interpolated over
-          * the tick count spanning the same wall-clock time, so the pan
-          * takes as long at any rate and ends exactly on slide_total. */
-         Blit::Pos slide_total;
-         Blit::Pos slide_moved;
-         unsigned slide_cnt;
-         unsigned slide_end;
+         icy_menu_slide_t slide;
 
          enum {
             preview_base_x      = 80,

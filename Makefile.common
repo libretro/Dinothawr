@@ -23,6 +23,7 @@ SOURCES_C += $(CORE_DIR)/blit_surface_cache.c
 SOURCES_C += $(CORE_DIR)/blit_font.c
 SOURCES_C += $(CORE_DIR)/blit_tilemap.c
 SOURCES_C += $(CORE_DIR)/icy_save.c
+SOURCES_C += $(CORE_DIR)/icy_menu_slide.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c

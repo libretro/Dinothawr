@@ -26,10 +26,9 @@ namespace Icy
       old_pressed_menu_up(false), old_pressed_menu_down(false),
       old_pressed_menu_ok(false), old_pressed_menu(false),
       old_pressed_reset(false),
-      menu_slide_dir(blit_pos_zero()), slide_total(blit_pos_zero()),
-      slide_moved(blit_pos_zero()),
-      slide_cnt(0), slide_end(1)
+      menu_slide_dir(blit_pos_zero())
    {
+      icy_menu_slide_init(&slide);
       init_menu_surfaces();
 
       xml_doc doc;
@@ -94,10 +93,9 @@ namespace Icy
       old_pressed_menu_up(false), old_pressed_menu_down(false),
       old_pressed_menu_ok(false), old_pressed_menu(false),
       old_pressed_reset(false),
-      menu_slide_dir(blit_pos_zero()), slide_total(blit_pos_zero()),
-      slide_moved(blit_pos_zero()),
-      slide_cnt(0), slide_end(1)
+      menu_slide_dir(blit_pos_zero())
    {
+      icy_menu_slide_init(&slide);
       init_menu_surfaces();
    }
 
@@ -396,18 +394,9 @@ namespace Icy
 
    void GameManager::step_menu_slide()
    {
-      Blit::Pos want = blit_pos_zero();
+      ui_target.rect.pos += icy_menu_slide_step(&slide);
 
-      slide_cnt++;
-      if (slide_cnt > slide_end)
-         slide_cnt = slide_end;
-
-      want = blit_pos(slide_total.x * (int)slide_cnt / (int)slide_end,
-                 slide_total.y * (int)slide_cnt / (int)slide_end);
-      ui_target.rect.pos += want - slide_moved;
-      slide_moved = want;
-
-      if (slide_cnt >= slide_end)
+      if (icy_menu_slide_done(&slide))
       {
          m_game_state = State::Menu;
          menu_slide_dir = {};
@@ -433,13 +422,10 @@ namespace Icy
    {
       m_game_state = State::MenuSlide;
 
-      slide_cnt   = 0;
       /* cnt is the duration in 60 Hz frames; dir * cnt is the distance it
        * used to cover one tick at a time. Keep the distance, convert the
        * duration. */
-      slide_end   = frames_to_ticks(cnt);
-      slide_total = (int)cnt * dir;
-      slide_moved = blit_pos_zero();
+      icy_menu_slide_start(&slide, (int)cnt * dir, frames_to_ticks(cnt));
 
       menu_slide_dir = dir;
 
