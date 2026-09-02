@@ -1,47 +1,24 @@
 #ifndef UTILS_HPP__
 #define UTILS_HPP__
 
-#include <stdint.h>
-#include <vector>
-
-#include <string>
-#include <sstream>
-#include <cctype>
-#include <algorithm>
-#include <iterator>
+#include <errno.h>
 #include <stdlib.h>
-#include <stdexcept>
+
+#include <algorithm>
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <errno.h>
-#include <functional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "xml.hpp"
-
-#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
-#if GCC_VERSION >= 70000
-#include <functional>
-#endif
 
 namespace Blit
 {
    namespace Utils
    {
-      template <typename T>
-      uint32_t read_le32(const T* data)
-      {
-         const uint8_t *ptr = reinterpret_cast<const uint8_t*>(data);
-         return (ptr[0] << 0) + (ptr[1] << 8) + (ptr[2] << 16) + (ptr[3] << 24);
-      }
-
-      template <typename T>
-      uint16_t read_le16(const T* data)
-      {
-         const uint8_t *ptr = reinterpret_cast<const uint8_t*>(data);
-         return (ptr[0] << 0) + (ptr[1] << 8);
-      }
-
       template <typename T>
       inline std::string join(T&& t)
       {
@@ -171,18 +148,6 @@ namespace Blit
          return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
       }
 
-      class ScopeExit
-      {
-         public:
-            ScopeExit(std::function<void ()> fn) : fn(fn) {}
-            ~ScopeExit() { fn(); }
-
-            ScopeExit& operator=(const ScopeExit&) = delete;
-            ScopeExit(const ScopeExit&) = delete;
-
-         private:
-            std::function<void ()> fn;
-      };
    }
 }
 
