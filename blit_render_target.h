@@ -82,6 +82,13 @@ void blit_render_target_blit_offset(blit_render_target_t *target,
 void blit_render_target_blit(blit_render_target_t *target,
       const blit_surface_t *surf, blit_rect_t subrect);
 
+/* A sub-rectangle of @src as its own surface, rendered through a scratch
+ * target. The caller owns the result; it is empty on failure. Lives here
+ * rather than beside the other surface calls because a scratch target is
+ * how it is done. */
+blit_surface_t blit_surface_sub(const blit_surface_t *src,
+      blit_rect_t rect);
+
 #ifdef __cplusplus
 }
 #endif

@@ -17,10 +17,6 @@
 
 namespace Blit
 {
-   /* A sub-rectangle of @src as its own surface, rendered through a
-    * scratch target. The caller owns the result. */
-   blit_surface_t surface_sub(const blit_surface_t& src, Rect rect);
-
 
    /* A wrapper over blit_surface_cluster_t. The elements belong to the
     * C struct; this adds the value semantics Tilemap's layers need and

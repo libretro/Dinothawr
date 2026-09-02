@@ -40,13 +40,31 @@ namespace Icy
        * re-descended into <game>.  Take the element once. */
       rxml_node_t *game_node = blit_xml_root(doc.get(), "game");
 
-      string font_path = Utils::join(dir, "/", blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
-      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00), "yellow");
-      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00), "yellow");
-      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b), "white");
-      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff), "white");
-      font.add_font(font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94), "lime");
-      font.add_font(font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0), "lime");
+      string font_path = Utils::join(dir, "/",
+            blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
+      char   err[256];
+
+      if (!(font = blit_font_cluster_new()))
+         throw std::bad_alloc();
+
+      if (!blit_font_cluster_add(font, "yellow", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00),
+               err, sizeof(err)))
+         throw runtime_error(err);
+      if (!blit_font_cluster_add(font, "yellow", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00),
+               err, sizeof(err)))
+         throw runtime_error(err);
+      if (!blit_font_cluster_add(font, "white", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b),
+               err, sizeof(err)))
+         throw runtime_error(err);
+      if (!blit_font_cluster_add(font, "white", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff),
+               err, sizeof(err)))
+         throw runtime_error(err);
+      if (!blit_font_cluster_add(font, "lime", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94),
+               err, sizeof(err)))
+         throw runtime_error(err);
+      if (!blit_font_cluster_add(font, "lime", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0),
+               err, sizeof(err)))
+         throw runtime_error(err);
 
       init_menu(blit_xml_attr(blit_xml_child(game_node, "title"), "source"));
       init_menu_sprite(game_node);
@@ -86,6 +104,7 @@ namespace Icy
     * nothing releases them either. */
    void GameManager::init_menu_surfaces()
    {
+      font = NULL;
       blit_render_target_init(&target);
       blit_render_target_init(&ui_target);
       blit_surface_init(&lock_sprite);
@@ -97,6 +116,7 @@ namespace Icy
 
    GameManager::~GameManager()
    {
+      blit_font_cluster_free(font);
       blit_render_target_release(&target);
       blit_render_target_release(&ui_target);
       blit_surface_release(&lock_sprite);
@@ -231,8 +251,9 @@ namespace Icy
       blit_render_target_blit(&target, &surf, blit_rect_zero());
       blit_surface_release(&surf);
 
-      font.set_id("yellow");
-      font.render_msg(target, "Press OK/Push button", 160, 170, Font::RenderAlignment::Centered);
+      blit_font_cluster_set_id(font, "yellow");
+      blit_font_cluster_render(font, &target, "Press OK/Push button",
+            160, 170, BLIT_FONT_CENTERED, 0);
    }
 
    void GameManager::reset_level()
@@ -342,17 +363,20 @@ namespace Icy
          if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
             blit_render_target_blit(&ui_target, &level_complete, blit_rect_zero());
 
-         font.set_id("white");
-         font.render_msg(ui_target, Utils::join(chap_select + 1,
-                  "-", level_select + 1), 240, 155, Font::RenderAlignment::Right);
+         blit_font_cluster_set_id(font, "white");
+         blit_font_cluster_render(font, &ui_target,
+               Utils::join(chap_select + 1, "-", level_select + 1).c_str(),
+               240, 155, BLIT_FONT_RIGHT, 0);
       }
 
-      font.set_id("lime");
-      font.render_msg(ui_target, Utils::join(total_cleared_levels(),
-               "/", total_levels()), 10, 185);
+      blit_font_cluster_set_id(font, "lime");
+      blit_font_cluster_render(font, &ui_target,
+            Utils::join(total_cleared_levels(), "/", total_levels()).c_str(),
+            10, 185, BLIT_FONT_LEFT, 0);
 
-      font.render_msg(ui_target, Utils::join(100 * total_cleared_levels() / total_levels(),
-               "%"), 315, 185, Font::RenderAlignment::Right);
+      blit_font_cluster_render(font, &ui_target,
+            Utils::join(100 * total_cleared_levels() / total_levels(),
+               "%").c_str(), 315, 185, BLIT_FONT_RIGHT, 0);
    }
 
    void GameManager::step_menu_slide()
@@ -567,8 +591,10 @@ namespace Icy
       if (trigger_ok || trigger_menu)
          enter_menu();
 
-      font.set_id("white");
-      font.render_msg(ui_target, "You completed all levels!\nAwesome! :D\nThanks for playing Dinothawr!", 160, 155, Font::RenderAlignment::Centered, 2);
+      blit_font_cluster_set_id(font, "white");
+      blit_font_cluster_render(font, &ui_target,
+            "You completed all levels!\nAwesome! :D\nThanks for playing Dinothawr!",
+            160, 155, BLIT_FONT_CENTERED, 2);
       m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 

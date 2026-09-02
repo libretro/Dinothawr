@@ -131,7 +131,7 @@ namespace Blit
             for (int x = 0; x < width; x += tilewidth, id_cnt++)
             {
                int id = first_gid + id_cnt;
-               blit_surface_t tile = surface_sub(surf,
+               blit_surface_t tile = blit_surface_sub(&surf,
                      blit_rect(blit_pos(x, y), tilewidth, tileheight));
 
                for (std::map<std::string, std::string>::const_iterator ga =

@@ -19,9 +19,9 @@ namespace Icy
       return ret;
    }
 
-   Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font)
+   Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
       : map(level_path),
-         player_off(blit_pos_zero()), font(&font),
+         player_off(blit_pos_zero()), font(font),
          camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), best_pushes(best_pushes), pushes(0),
@@ -123,13 +123,15 @@ namespace Icy
 
       if (font)
       {
-         font->set_id("lime");
-         font->render_msg(target, 
-               Utils::join((chapter + 1), "-", (level + 1)), 314, 184, Font::RenderAlignment::Right);
+         blit_font_cluster_set_id(font, "lime");
+         blit_font_cluster_render(font, &target, (Utils::join((chapter + 1), "-", (level + 1))).c_str(),
+               314, 184, BLIT_FONT_RIGHT, 0);
          if (!best_pushes)
-            font->render_msg(target, Utils::join(" Pushes:", pushes), 2, 184);
+            blit_font_cluster_render(font, &target, (Utils::join(" Pushes:", pushes)).c_str(),
+               2, 184, BLIT_FONT_LEFT, 0);
          else
-            font->render_msg(target, Utils::join(" Pushes:", pushes, " Best:", best_pushes), 2, 184);
+            blit_font_cluster_render(font, &target, (Utils::join(" Pushes:", pushes, " Best:", best_pushes)).c_str(),
+               2, 184, BLIT_FONT_LEFT, 0);
       }
 
       if (m_video_cb)

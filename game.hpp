@@ -3,7 +3,7 @@
 
 #include "surface_cluster.hpp"
 #include "tilemap.hpp"
-#include "font.hpp"
+#include "blit_font.h"
 #include "audio/mixer_f32.h"
 #include "audio/mixer_i16.h"
 #include "audio/async_job.h"
@@ -163,7 +163,7 @@ namespace Icy
    class Game
    {
       public:
-         Game(const std::string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font);
+         Game(const std::string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t* font);
          Game(const std::string& level_path);
 
          void input_cb(std::function<bool (Input)> cb) { m_input_cb = cb; }
@@ -200,7 +200,7 @@ namespace Icy
          blit_render_target_t target;
          blit_surface_t player;
          Blit::Pos player_off;
-         Blit::FontCluster *font;
+         blit_font_cluster_t *font;
          const blit_surface_t *bg;
          Input facing;
 
@@ -439,7 +439,7 @@ namespace Icy
          blit_render_target_t target;
 
          blit_render_target_t ui_target;
-         Blit::FontCluster font;
+         blit_font_cluster_t *font;
 
          blit_surface_t lock_sprite;
 
