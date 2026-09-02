@@ -48,3 +48,23 @@ a result wrong first:
    `-falign-loops=32 -falign-functions=32`, and only believe a result
    that holds both ways. Code alignment alone is worth about six percent
    on this workload, which is more than most changes worth making.
+
+## Rewriting a parser
+
+`dump_tilemap.cpp` prints everything a `.tmx` parse produced - layer
+names and attributes, every tile's position, size and attributes, and
+the collision grid - in a stable order.
+
+It exists because the frame hash is the wrong oracle for a parser. The
+hash says the picture changed; it does not say which tile got the wrong
+attributes, and hunting that difference by reading a five-hundred-line
+rewrite does not work. Dump before, dump after, diff, and only then
+check the hash.
+
+Run it over more than one level. `level_1-1` has a single Blocks tile
+and exercises almost none of the tileset code; `level_5-3` and
+`level_10-5` are better.
+
+The same argument applies to anything else whose output is data rather
+than pixels - the save format, the sprite parse, the audio decode. Build
+the oracle at the layer being changed, not three layers downstream.
