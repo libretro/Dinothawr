@@ -382,6 +382,16 @@ namespace Icy
          std::function<bool (Input)> m_input_cb;
          std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
 
+         /* Public for the C navigation module's callbacks, which take a
+          * GameManager as their context. */
+      public:
+         unsigned chapter_level_count(unsigned chapter) const
+         { return chapter < chapters.size()
+            ? (unsigned)chapters[chapter].num_levels() : 0; }
+         bool chapter_is_cleared(unsigned chapter) const
+         { return chapter < chapters.size() && chapters[chapter].cleared(); }
+
+      private:
          void init_menu_surfaces();
          void init_menu(const std::string& title);
          void init_menu_sprite(rxml_node_t* game_node);

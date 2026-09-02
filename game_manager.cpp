@@ -1,5 +1,6 @@
 #include "game.hpp"
 #include "icy_save.h"
+#include "icy_menu_select.h"
 #include <new>
 #include <cstring>
 #include <cstdlib>
@@ -15,6 +16,21 @@ using namespace std;
 
 namespace Icy
 {
+   /* Chapter list accessors for icy_menu_select.c. */
+   extern "C" {
+      static unsigned menu_levels_cb(void *ctx, unsigned chapter)
+      {
+         return (unsigned)static_cast<GameManager*>(ctx)
+            ->chapter_level_count(chapter);
+      }
+
+      static int menu_cleared_cb(void *ctx, unsigned chapter)
+      {
+         return static_cast<GameManager*>(ctx)
+            ->chapter_is_cleared(chapter) ? 1 : 0;
+      }
+   }
+
    GameManager::GameManager(const string& path_game,
          function<bool (Input)> input_cb,
          function<void (const void*, unsigned, unsigned, size_t)> video_cb)
@@ -450,63 +466,54 @@ namespace Icy
       bool pressed_menu_ok     = m_input_cb(Input::Push);
       bool pressed_menu			 = m_input_cb(Input::Menu);
 
-      int levels_in_chapter = chapters.at(chap_select).num_levels();
-      int chapter_size = chapters.size();
+      /* Navigation is index arithmetic over the chapter list, so it
+       * lives in icy_menu_select.c; this turns a press into a direction
+       * and the move it reports into a slide. */
+      {
+         icy_menu_chapters_t list;
+         icy_menu_cursor_t   cursor;
+         enum icy_menu_dir   dir;
+         bool                pressed = true;
 
-      if (pressed_menu_left && !old_pressed_menu_left)
-      {
-         if (level_select > 0)
-         {
-            level_select--;
-            start_slide({-8, 0}, preview_slide_cnt);
-         }
-         else if (level_select == 0 && chap_select > 0)
-         {
-            int levels_in_prev_chapter = chapters[chap_select - 1].num_levels();
-            chap_select--;
-            start_slide({(levels_in_prev_chapter - 1) * 8, -8}, preview_slide_cnt);
-            level_select = levels_in_prev_chapter - 1;
-         }
-      }
-      else if (pressed_menu_right && !old_pressed_menu_right)
-      {
-         if (level_select < levels_in_chapter - 1)
-         {
-            level_select++;
-            start_slide({8, 0}, preview_slide_cnt);
-         }
-         else if (level_select == levels_in_chapter - 1 && chap_select < chapter_size - 1)
-         {
-            if (chapters[chap_select].cleared())
-            {
-               chap_select++;
-               start_slide({(levels_in_chapter - 1) * -8, 8}, preview_slide_cnt);
-               level_select = 0;
-            }
-            else
-               icy_sfx_play(icy_sfx(), "chapter_locked", 0.5f);
-         }
-      }
-      else if (pressed_menu_up && !old_pressed_menu_up && chap_select > 0)
-      {
-         int new_level = min(chapters[chap_select - 1].num_levels() - 1, static_cast<unsigned>(level_select));
-         chap_select--;
-         start_slide({(new_level - static_cast<int>(level_select)) * 8, -8}, preview_slide_cnt);
-         level_select = new_level;
-      }
-      else if (pressed_menu_down && !old_pressed_menu_down && chap_select < static_cast<int>(chapters.size()) - 1)
-      {
-         if (chapters[chap_select].cleared())
-         {
-            int new_level = min(chapters[chap_select + 1].num_levels() - 1, static_cast<unsigned>(level_select));
-            chap_select++;
-            start_slide({(new_level - static_cast<int>(level_select)) * 8, 8}, preview_slide_cnt);
-            level_select = new_level;
-         }
+         list.chapters = (unsigned)chapters.size();
+         list.levels   = menu_levels_cb;
+         list.cleared  = menu_cleared_cb;
+         list.ctx      = this;
+
+         cursor.chapter = (unsigned)chap_select;
+         cursor.level   = (unsigned)level_select;
+
+         if (pressed_menu_left && !old_pressed_menu_left)
+            dir = ICY_MENU_LEFT;
+         else if (pressed_menu_right && !old_pressed_menu_right)
+            dir = ICY_MENU_RIGHT;
+         else if (pressed_menu_up && !old_pressed_menu_up)
+            dir = ICY_MENU_UP;
+         else if (pressed_menu_down && !old_pressed_menu_down)
+            dir = ICY_MENU_DOWN;
          else
-            icy_sfx_play(icy_sfx(), "chapter_locked", 0.5f);
+         {
+            pressed = false;
+            dir     = ICY_MENU_LEFT;
+         }
+
+         if (pressed)
+         {
+            icy_menu_move_t move = icy_menu_move(&cursor, dir, &list);
+
+            if (move.locked)
+               icy_sfx_play(icy_sfx(), "chapter_locked", 0.5f);
+            else if (move.moved)
+            {
+               chap_select  = (int)cursor.chapter;
+               level_select = (int)cursor.level;
+               start_slide(blit_pos(move.level_delta * 8,
+                        move.chapter_delta * 8), preview_slide_cnt);
+            }
+         }
       }
-      else if (pressed_menu_ok && !old_pressed_menu_ok)
+
+      if (pressed_menu_ok && !old_pressed_menu_ok)
          init_level(chap_select, level_select);
       else if (pressed_menu && !old_pressed_menu && game)
          m_game_state = State::Game;
