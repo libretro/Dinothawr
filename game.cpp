@@ -161,7 +161,7 @@ namespace Icy
       }
 
       if (m_video_cb)
-         m_video_cb(target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
+         m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
    }
 
    /* A plain scan rather than copy_if over a reference_wrapper vector:
@@ -226,7 +226,7 @@ namespace Icy
             block->offset = player_off;
       }
 
-      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && push.set(m_input_cb(Input::Push));
+      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && push.set(m_input_cb(m_input_ctx, Input::Push));
       return true;
    }
 
@@ -315,22 +315,22 @@ namespace Icy
 
    void Game::update_triggers()
    {
-      push.set(m_input_cb(Input::Push));
+      push.set(m_input_cb(m_input_ctx, Input::Push));
    }
 
    void Game::update_input()
    {
-      bool push_trigger = push.set(m_input_cb(Input::Push));
+      bool push_trigger = push.set(m_input_cb(m_input_ctx, Input::Push));
 
       if (push_trigger)
          push_block();
-      else if (m_input_cb(Input::Up))
+      else if (m_input_cb(m_input_ctx, Input::Up))
          move_if_no_collision(Input::Up);
-      else if (m_input_cb(Input::Down))
+      else if (m_input_cb(m_input_ctx, Input::Down))
          move_if_no_collision(Input::Down);
-      else if (m_input_cb(Input::Left))
+      else if (m_input_cb(m_input_ctx, Input::Left))
          move_if_no_collision(Input::Left);
-      else if (m_input_cb(Input::Right))
+      else if (m_input_cb(m_input_ctx, Input::Right))
          move_if_no_collision(Input::Right);
    }
 

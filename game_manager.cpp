@@ -33,11 +33,12 @@ namespace Icy
    }
 
    GameManager::GameManager(const string& path_game,
-         function<bool (Input)> input_cb,
-         function<void (const void*, unsigned, unsigned, size_t)> video_cb)
+         input_fn input_cb,
+         video_fn video_cb)
       : save(chapters), dir(Utils::basedir(path_game)),
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
-      m_input_cb(input_cb), m_video_cb(video_cb),
+      m_input_cb(input_cb), m_input_ctx(NULL),
+      m_video_cb(video_cb), m_video_ctx(NULL),
       chap_select(0), level_select(0),
       menu_slide_dir(blit_pos_zero())
    {
@@ -293,8 +294,8 @@ namespace Icy
             level,
             chapters.at(chapter).level(level).get_best_pushes(),
             font);
-      game->input_cb(m_input_cb);
-      game->video_cb(m_video_cb);
+      game->input_cb(m_input_cb, m_input_ctx);
+      game->video_cb(m_video_cb, m_video_ctx);
       game->set_bg(game_bg);
 
       m_current_chap  = chapter;
@@ -353,13 +354,13 @@ namespace Icy
 
    void GameManager::step_title()
    {
-      if (m_input_cb(Input::Push) || m_input_cb(Input::Menu))
+      if (m_input_cb(m_input_ctx, Input::Push) || m_input_cb(m_input_ctx, Input::Menu))
       {
          set_initial_level();
          enter_menu();
       }
 
-      m_video_cb(target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::enter_menu()
@@ -423,7 +424,7 @@ namespace Icy
 
       menu_render_ui();
 
-      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    const GameManager::Level& GameManager::get_selected_level() const
@@ -457,17 +458,17 @@ namespace Icy
 
       /* Edges, not levels: a held direction moves the cursor once. */
       bool pressed_menu_left  = icy_edge_pressed(&edges, ICY_EDGE_LEFT,
-            m_input_cb(Input::Left));
+            m_input_cb(m_input_ctx, Input::Left));
       bool pressed_menu_right = icy_edge_pressed(&edges, ICY_EDGE_RIGHT,
-            m_input_cb(Input::Right));
+            m_input_cb(m_input_ctx, Input::Right));
       bool pressed_menu_up    = icy_edge_pressed(&edges, ICY_EDGE_UP,
-            m_input_cb(Input::Up));
+            m_input_cb(m_input_ctx, Input::Up));
       bool pressed_menu_down  = icy_edge_pressed(&edges, ICY_EDGE_DOWN,
-            m_input_cb(Input::Down));
+            m_input_cb(m_input_ctx, Input::Down));
       bool pressed_menu_ok    = icy_edge_pressed(&edges, ICY_EDGE_OK,
-            m_input_cb(Input::Push));
+            m_input_cb(m_input_ctx, Input::Push));
       bool pressed_menu       = icy_edge_pressed(&edges, ICY_EDGE_MENU,
-            m_input_cb(Input::Menu));
+            m_input_cb(m_input_ctx, Input::Menu));
 
       /* Navigation is index arithmetic over the chapter list, so it
        * lives in icy_menu_select.c; this turns a press into a direction
@@ -521,7 +522,7 @@ namespace Icy
       else if (pressed_menu && game)
          m_game_state = State::Game;
 
-      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::step_game()
@@ -531,8 +532,8 @@ namespace Icy
 
       game->iterate();
 
-      bool pressed_menu = m_input_cb(Input::Menu);
-      bool pressed_reset = m_input_cb(Input::Reset);
+      bool pressed_menu = m_input_cb(m_input_ctx, Input::Menu);
+      bool pressed_reset = m_input_cb(m_input_ctx, Input::Reset);
 
       if (icy_edge_pressed(&edges, ICY_EDGE_RESET, pressed_reset))
          reset_level();
@@ -585,9 +586,9 @@ namespace Icy
       blit_render_target_blit(&ui_target, &end_credit_bg, blit_rect_zero());
 
       bool trigger_ok   = icy_edge_pressed(&edges, ICY_EDGE_OK,
-            m_input_cb(Input::Push));
+            m_input_cb(m_input_ctx, Input::Push));
       bool trigger_menu = icy_edge_pressed(&edges, ICY_EDGE_MENU,
-            m_input_cb(Input::Menu));
+            m_input_cb(m_input_ctx, Input::Menu));
 
       if (trigger_ok || trigger_menu)
          enter_menu();
@@ -596,7 +597,7 @@ namespace Icy
       blit_font_cluster_render(font, &ui_target,
             "You completed all levels!\nAwesome! :D\nThanks for playing Dinothawr!",
             160, 155, BLIT_FONT_CENTERED, 2);
-      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::iterate()
@@ -652,8 +653,16 @@ namespace Icy
       vector<Pixel> data(preview_width * preview_height);
       Pixel *owned;
 
-      game.input_cb([](Input) { return false; });
-      game.video_cb([&data, preview_width](const void* pix_data, unsigned width, unsigned height, size_t pitch) {
+      /* The downscale needs the destination and its pitch, so it goes
+       * through the context pointer rather than a capture. */
+      struct preview_ctx { vector<Pixel> *data; int width; };
+      preview_ctx ctx = { &data, preview_width };
+
+      game.input_cb([](void*, Input) { return false; });
+      game.video_cb([](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
+         preview_ctx *c = static_cast<preview_ctx*>(ctxv);
+         vector<Pixel>& data = *c->data;
+         int preview_width = c->width;
          const Pixel* pix = reinterpret_cast<const Pixel*>(pix_data);
          pitch /= sizeof(Pixel);
 
@@ -671,7 +680,7 @@ namespace Icy
                data[preview_width * (y / scale_factor) + (x / scale_factor)] = res | BLIT_PIXEL_ALPHA_MASK;
             }
          }
-      });
+      }, &ctx);
 
       game.iterate();
 

@@ -25,6 +25,7 @@
 
 namespace Icy
 {
+
    /* An attribute or a default, for the loader's many optional keys. */
    inline const char *attr_or(const blit_attr_table_t *table,
          const char *key, const char *fallback)
@@ -75,6 +76,13 @@ namespace Icy
       None  = ICY_INPUT_NONE
    };
 
+   /* The frontend's two hooks. Plain function pointers: the callers pass
+    * lambdas that capture nothing, and a std::function was carrying an
+    * empty capture through every frame's input read. */
+   typedef bool (*input_fn)(void *ctx, Input input);
+   typedef void (*video_fn)(void *ctx, const void *data, unsigned width,
+         unsigned height, std::size_t pitch);
+
    class EdgeDetector
    {
       public:
@@ -90,8 +98,10 @@ namespace Icy
          Game(const std::string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t* font);
          Game(const std::string& level_path);
 
-         void input_cb(std::function<bool (Input)> cb) { m_input_cb = cb; }
-         void video_cb(std::function<void (const void*, unsigned, unsigned, std::size_t)> cb) { m_video_cb = cb; }
+         void input_cb(input_fn cb, void *ctx = NULL)
+         { m_input_cb = cb; m_input_ctx = ctx; }
+         void video_cb(video_fn cb, void *ctx = NULL)
+         { m_video_cb = cb; m_video_ctx = ctx; }
 
          int width() const { return blit_tilemap_pix_width(map); }
          int height() const { return blit_tilemap_pix_height(map); }
@@ -139,8 +149,10 @@ namespace Icy
          enum { push_anim_frames     = 7 };
          bool won_condition();
 
-         std::function<bool (Input)> m_input_cb;
-         std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
+         input_fn m_input_cb;
+         void    *m_input_ctx;
+         video_fn m_video_cb;
+         void    *m_video_ctx;
 
          /* What is being stepped, if anything. There are exactly two
           * things it can be - a surface crossing a tile, or the win
@@ -206,8 +218,8 @@ namespace Icy
          };
 
          GameManager(const std::string& path_game,
-               std::function<bool (Input)> input_cb,
-               std::function<void (const void*, unsigned, unsigned, std::size_t)> video_cb);
+               input_fn input_cb,
+               video_fn video_cb);
 
          GameManager();
          ~GameManager();
@@ -217,8 +229,10 @@ namespace Icy
          GameManager(const GameManager&) = delete;
          GameManager& operator=(const GameManager&) = delete;
 
-         void input_cb(std::function<bool (Input)> cb) { m_input_cb = cb; }
-         void video_cb(std::function<void (const void*, unsigned, unsigned, std::size_t)> cb) { m_video_cb = cb; }
+         void input_cb(input_fn cb, void *ctx = NULL)
+         { m_input_cb = cb; m_input_ctx = ctx; }
+         void video_cb(video_fn cb, void *ctx = NULL)
+         { m_video_cb = cb; m_video_ctx = ctx; }
 
          void iterate();
 
@@ -375,8 +389,10 @@ namespace Icy
          blit_surface_t end_credit_bg;
          blit_surface_t game_bg;
 
-         std::function<bool (Input)> m_input_cb;
-         std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
+         input_fn m_input_cb;
+         void    *m_input_ctx;
+         video_fn m_video_cb;
+         void    *m_video_ctx;
 
          /* Public for the C navigation module's callbacks, which take a
           * GameManager as their context. */

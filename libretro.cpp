@@ -331,30 +331,38 @@ void retro_run(void)
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
 }
 
+/* Free functions rather than lambdas: both only ever read the frontend
+ * callbacks, which are file-scope, so the captures were empty and the
+ * std::function they were stored in outlived the scope that made them. */
+static bool poll_input(void*, Input input)
+{
+   unsigned btn;
+
+   switch (input)
+   {
+      case Input::Up: btn = RETRO_DEVICE_ID_JOYPAD_UP; break;
+      case Input::Down: btn = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
+      case Input::Left: btn = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
+      case Input::Right: btn = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
+      case Input::Push: btn = RETRO_DEVICE_ID_JOYPAD_B; break;
+      case Input::Menu: btn = RETRO_DEVICE_ID_JOYPAD_A; break;
+      case Input::Reset: btn = RETRO_DEVICE_ID_JOYPAD_X; break;
+      default: return false;
+   }
+
+   return input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, btn);
+}
+
+static void refresh_video(void*, const void *data, unsigned width,
+      unsigned height, size_t pitch)
+{
+   video_cb(data, width, height, pitch);
+}
+
 static void load_game(const string& path)
 {
-   auto input_cb = [&](Input input) -> bool {
-      unsigned btn;
-      switch (input)
-      {
-         case Input::Up:    btn = RETRO_DEVICE_ID_JOYPAD_UP; break;
-         case Input::Down:  btn = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
-         case Input::Left:  btn = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
-         case Input::Right: btn = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
-         case Input::Push:  btn = RETRO_DEVICE_ID_JOYPAD_B; break;
-         case Input::Menu:  btn = RETRO_DEVICE_ID_JOYPAD_A; break;
-         case Input::Reset: btn = RETRO_DEVICE_ID_JOYPAD_X; break;
-         default: return false;
-      }
-
-      return input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, btn);
-   };
-
-   game = Blit::Utils::make_unique<GameManager>(path, input_cb,
-         [&](const void* data, unsigned width, unsigned height, size_t pitch) {
-            video_cb(data, width, height, pitch);
-         }
-   );
+   game = Blit::Utils::make_unique<GameManager>(path, poll_input,
+         refresh_video);
 }
 
 void retro_reset(void)
