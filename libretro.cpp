@@ -6,7 +6,15 @@
 #include <iostream>
 #include <cmath>
 
-#include "game.hpp"
+#include "icy_manager.h"
+#include "icy_game.h"
+#include "icy_rate.h"
+#include "icy_input.h"
+#include "icy_save.h"
+#include "blit_surface_cache.h"
+#include "audio/game_audio.h"
+#include "audio/mixer_f32.h"
+#include "audio/mixer_i16.h"
 #include "audio/mixer_f32.h"
 
 #include <file/file_path.h>
@@ -16,10 +24,9 @@
 #include "icy_path.h"
 #include "icy_rate.h"
 
-using namespace Icy;
 using namespace std;
 
-static unique_ptr<GameManager> game;
+static icy_manager_t *game;
 static string game_path;
 static string game_path_dir;
 
@@ -321,7 +328,8 @@ void retro_run(void)
     * be unloaded instead, which loses the session and nothing else. */
    try
    {
-      game->iterate();
+      if (!icy_manager_iterate(game))
+         throw runtime_error(icy_manager_error(game));
    }
    catch (const std::exception& e)
    {
@@ -336,7 +344,7 @@ void retro_run(void)
    icy_bgm_step(icy_bgm());
    audio_callback();
 
-   if (game->done())
+   if (icy_manager_done(game))
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
 }
 
@@ -370,18 +378,45 @@ static void refresh_video(void*, const void *data, unsigned width,
 
 static void load_game(const string& path)
 {
-   game.reset(new GameManager(path.c_str(), poll_input, refresh_video));
+   {
+      char err[256];
+
+      icy_manager_free(game);
+      game = icy_manager_new(path.c_str(), poll_input, NULL, refresh_video,
+            NULL, err, sizeof(err));
+
+      if (!game)
+         throw runtime_error(err);
+   }
 }
 
+/* Reload, keeping the save: the manager is rebuilt from the .game, so
+ * the SRAM has to be carried across by hand. */
 void retro_reset(void)
 {
-   size_t memory_size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
-   vector<uint8_t> data(memory_size);
-   uint8_t *game_data = reinterpret_cast<uint8_t*>(retro_get_memory_data(RETRO_MEMORY_SAVE_RAM));
-   copy(game_data, game_data + memory_size, data.data());
-   load_game(game_path);
-   game_data = reinterpret_cast<uint8_t*>(retro_get_memory_data(RETRO_MEMORY_SAVE_RAM));
-   copy(data.begin(), data.end(), game_data);
+   icy_save_t saved;
+   size_t     size = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+   void      *data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+
+   if (size > sizeof(saved.data))
+      size = sizeof(saved.data);
+
+   if (data)
+      memcpy(saved.data, data, size);
+
+   try
+   {
+      load_game(game_path);
+   }
+   catch (const std::exception& e)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "Dinothawr: reset failed: %s\n", e.what());
+      return;
+   }
+
+   if ((data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM)))
+      memcpy(data, saved.data, size);
 }
 
 /* Both message interfaces, so a failure is visible on old frontends
@@ -545,7 +580,8 @@ bool retro_load_game(const struct retro_game_info* info)
                e.what());
 
       show_message("Dinothawr: failed to load game files");
-      game.reset();
+      icy_manager_free(game);
+      game = NULL;
       return false;
    }
 
@@ -569,7 +605,8 @@ bool retro_load_game_special(unsigned, const struct retro_game_info*, size_t)
 
 void retro_unload_game(void)
 {
-   game.reset();
+   icy_manager_free(game);
+   game = NULL;
 
    /* Before the mixer goes away: the music slot points into it, and a
     * decode may still be in flight holding a buffer nothing else can
@@ -613,7 +650,7 @@ void* retro_get_memory_data(unsigned id)
    if (id != RETRO_MEMORY_SAVE_RAM)
       return NULL;
 
-   return game->save_data();
+   return icy_manager_save_data(game);
 }
 
 size_t retro_get_memory_size(unsigned id)
@@ -621,7 +658,7 @@ size_t retro_get_memory_size(unsigned id)
    if (id != RETRO_MEMORY_SAVE_RAM)
       return 0;
 
-   return game->save_size();
+   return icy_manager_save_size(game);
 }
 
 void retro_cheat_reset(void)
