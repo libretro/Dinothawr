@@ -18,6 +18,20 @@ namespace Icy
 {
    /* Loads an image or dies: every caller here treats a missing asset
     * as fatal, which is what the C entry point leaves to them. */
+   /* Joins an asset path onto the game's directory. Returns a pointer to
+    * a rotating set of buffers, so a caller may hold a few at once
+    * without owning any of them - they are all consumed immediately by
+    * a load. */
+   static const char *asset(const char *dir, const char *name)
+   {
+      static char bufs[4][512];
+      static unsigned next;
+      char *out = bufs[next++ & 3];
+
+      icy_path_join(out, 512, dir, name);
+      return out;
+   }
+
    static blit_surface_t cache_image_or_throw(const char *path)
    {
       blit_surface_t out;
@@ -55,22 +69,6 @@ namespace Icy
          rxml_document_t *doc;
    };
 
-   /* Small shims while GameManager still holds std::strings: the path
-    * work itself is icy_path.c. */
-   static std::string path_dir(const std::string& path)
-   {
-      char out[512];
-      icy_path_dir(out, sizeof(out), path.c_str());
-      return out;
-   }
-
-   static std::string path_join(const std::string& dir, const char *name)
-   {
-      char out[512];
-      icy_path_join(out, sizeof(out), dir.c_str(), name);
-      return out;
-   }
-
    /* Chapter list accessors for icy_menu_select.c. */
    extern "C" {
       static unsigned menu_levels_cb(void *ctx, unsigned chapter)
@@ -86,10 +84,10 @@ namespace Icy
       }
    }
 
-   GameManager::GameManager(const string& path_game,
+   GameManager::GameManager(const char *path_game,
          input_fn input_cb,
          video_fn video_cb)
-      : dir(path_dir(path_game)),
+      :
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
       m_input_cb(input_cb), m_input_ctx(NULL),
       m_video_cb(video_cb), m_video_ctx(NULL),
@@ -99,6 +97,7 @@ namespace Icy
       icy_edge_init(&edges);
       icy_menu_slide_init(&slide);
       init_menu_surfaces();
+      icy_path_dir(dir, sizeof(dir), path_game);
 
       /* A throw out of a constructor skips the destructor, so anything
        * this body has already taken has to be released by hand. Every
@@ -109,11 +108,11 @@ namespace Icy
       {
       xml_doc doc;
 
-      if (!doc.load(path_game.c_str()))
+      if (!doc.load(path_game))
       {
          char msg[512];
          snprintf(msg, sizeof(msg), "Failed to load game: %s.",
-               path_game.c_str());
+               path_game);
          throw runtime_error(msg);
       }
 
@@ -121,28 +120,31 @@ namespace Icy
        * re-descended into <game>.  Take the element once. */
       rxml_node_t *game_node = blit_xml_root(doc.get(), "game");
 
-      string font_path = path_join(dir, blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
+      char font_path[512];
+
+      icy_path_join(font_path, sizeof(font_path), dir,
+            blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
       char   err[256];
 
       if (!(font = blit_font_cluster_new()))
          throw std::bad_alloc();
 
-      if (!blit_font_cluster_add(font, "yellow", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00),
+      if (!blit_font_cluster_add(font, "yellow", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00),
                err, sizeof(err)))
          throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "yellow", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00),
+      if (!blit_font_cluster_add(font, "yellow", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00),
                err, sizeof(err)))
          throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "white", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b),
+      if (!blit_font_cluster_add(font, "white", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b),
                err, sizeof(err)))
          throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "white", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff),
+      if (!blit_font_cluster_add(font, "white", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff),
                err, sizeof(err)))
          throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "lime", font_path.c_str(), blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94),
+      if (!blit_font_cluster_add(font, "lime", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94),
                err, sizeof(err)))
          throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "lime", font_path.c_str(), blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0),
+      if (!blit_font_cluster_add(font, "lime", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0),
                err, sizeof(err)))
          throw runtime_error(err);
 
@@ -202,6 +204,7 @@ namespace Icy
       /* Plain C members in a C++ class: nothing initialises them. */
       icy_level_list_init(&chapters);
       icy_save_clear(&save);
+      dir[0] = '\0';
       font = NULL;
       blit_render_target_init(&target);
       blit_render_target_init(&ui_target);
@@ -220,13 +223,13 @@ namespace Icy
    void GameManager::init_menu_sprite(rxml_node_t *game_node)
    {
       {
-         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")).c_str());
+         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
          blit_surface_assign(&level_complete, &tmp);
          blit_surface_release(&tmp);
       }
 
       {
-         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")).c_str());
+         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
          blit_surface_assign(&lock_sprite, &tmp);
          blit_surface_release(&tmp);
       }
@@ -240,21 +243,21 @@ namespace Icy
       level_complete.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")).c_str());
+         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
          blit_surface_assign(&level_select_bg, &tmp);
          blit_surface_release(&tmp);
       }
       level_select_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")).c_str());
+         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
          blit_surface_assign(&end_credit_bg, &tmp);
          blit_surface_release(&tmp);
       }
       end_credit_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")).c_str());
+         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
          blit_surface_assign(&game_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -276,7 +279,7 @@ namespace Icy
          const char *source = blit_xml_attr(node, "source");
          const char *volume = blit_xml_attr(node, "volume");
 
-         paths.push_back(path_join(dir, source));
+         paths.push_back(asset(dir, source));
          gains.push_back(*volume ? (float)std::strtod(volume, NULL) : 1.0f);
       }
 
@@ -301,7 +304,7 @@ namespace Icy
       for (node = blit_xml_child(sfx, "sound"); node;
             node = blit_xml_next(node, "sound"))
          if (!icy_sfx_add(icy_sfx(), blit_xml_attr(node, "name"),
-                  path_join(dir, blit_xml_attr(node, "source")).c_str()))
+                  asset(dir, blit_xml_attr(node, "source"))))
          {
             char msg[512];
             snprintf(msg, sizeof(msg), "Failed to load sound: %s",
@@ -310,7 +313,7 @@ namespace Icy
          }
    }
 
-   static blit_surface_t make_preview(const std::string& path,
+   static blit_surface_t make_preview(const char *path,
          const blit_surface_t& bg);
 
    void GameManager::load_chapter(rxml_node_t *chap, int chapter)
@@ -326,10 +329,10 @@ namespace Icy
       for (node = blit_xml_child(chap, "map"); node;
             node = blit_xml_next(node, "map"), i++)
       {
-         string         path    = path_join(dir, blit_xml_attr(node, "source"));
+         const char    *path    = asset(dir, blit_xml_attr(node, "source"));
          blit_surface_t preview = make_preview(path, game_bg);
          icy_level_t   *level   = icy_chapter_add_level(loaded,
-               path.c_str(), blit_xml_attr(node, "name"), &preview);
+               path, blit_xml_attr(node, "name"), &preview);
 
          blit_surface_release(&preview);
 
@@ -350,10 +353,9 @@ namespace Icy
       }
    }
 
-   void GameManager::init_menu(const string& level)
+   void GameManager::init_menu(const char *level)
    {
-      blit_surface_t surf = cache_image_or_throw(
-            path_join(dir, level.c_str()).c_str());
+      blit_surface_t surf = cache_image_or_throw(asset(dir, level));
 
       blit_render_target_release(&target);
       if (!blit_render_target_init_size(&target, ICY_GAME_FB_WIDTH,
@@ -739,7 +741,7 @@ namespace Icy
 
    /* Renders one frame of a level at half size, which is what the menu
     * shows for it. */
-   static blit_surface_t make_preview(const string& path,
+   static blit_surface_t make_preview(const char *path,
          const blit_surface_t& bg)
    {
       blit_surface_t preview;
@@ -748,7 +750,7 @@ namespace Icy
 
       /* No font: a preview draws the level once and never a HUD. */
       char        err[256];
-      icy_game_t *preview_game = icy_game_new(path.c_str(), 0, 0, 0, NULL,
+      icy_game_t *preview_game = icy_game_new(path, 0, 0, 0, NULL,
             err, sizeof(err));
 
       if (!preview_game)

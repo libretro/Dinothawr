@@ -370,7 +370,7 @@ static void refresh_video(void*, const void *data, unsigned width,
 
 static void load_game(const string& path)
 {
-   game.reset(new GameManager(path, poll_input, refresh_video));
+   game.reset(new GameManager(path.c_str(), poll_input, refresh_video));
 }
 
 void retro_reset(void)

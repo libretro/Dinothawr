@@ -86,7 +86,7 @@ namespace Icy
             End
          };
 
-         GameManager(const std::string& path_game,
+         GameManager(const char *path_game,
                input_fn input_cb,
                video_fn video_cb);
 
@@ -124,7 +124,8 @@ namespace Icy
          struct GameDeleter
          { void operator()(icy_game_t *g) const { icy_game_free(g); } };
          std::unique_ptr<icy_game_t, GameDeleter> game;
-         std::string dir;
+         /* The .game file's directory; every asset is relative to it. */
+         char dir[512];
 
          unsigned m_current_chap;
          unsigned m_current_level;
@@ -161,7 +162,7 @@ namespace Icy
          void render_previews();
          void init_menu_surfaces();
          void release_owned();
-         void init_menu(const std::string& title);
+         void init_menu(const char *title);
          void init_menu_sprite(rxml_node_t* game_node);
          void init_level(unsigned chapter, unsigned level);
          void init_sfx(rxml_node_t* game_node);
