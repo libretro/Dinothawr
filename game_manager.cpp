@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "icy_save.h"
 #include <new>
 #include <cstring>
 #include <cstdlib>
@@ -725,57 +726,54 @@ namespace Icy
       return save_data.data();
    }
 
+   /* Gathers the layout and the counts, and lets icy_save.c do the
+    * encoding: what the bytes look like is not this class's business. */
    void GameManager::SaveManager::serialize()
    {
-      string full_pushes;
-      for (auto& chap : chaps)
+      std::vector<unsigned> counts;
+      std::vector<unsigned> per_chapter;
+      size_t c;
+
+      for (c = 0; c < chaps.size(); c++)
       {
-         string pushes;
-         for (auto& level : chap.levels())
-            pushes += Utils::join(level.get_best_pushes(), ",");
-         full_pushes += pushes + '\n';
+         per_chapter.push_back((unsigned)chaps[c].levels().size());
+         for (size_t l = 0; l < chaps[c].levels().size(); l++)
+            counts.push_back(chaps[c].levels()[l].get_best_pushes());
       }
 
-      fill(save_data.begin(), save_data.end(), '\0');
-      copy(full_pushes.begin(), full_pushes.end(), begin(save_data));
+      icy_save_encode(save_data.data(), save_data.size(),
+            counts.empty() ? NULL : &counts[0],
+            per_chapter.empty() ? NULL : &per_chapter[0],
+            per_chapter.size());
    }
 
    void GameManager::SaveManager::unserialize()
    {
-      string save{save_data.begin(), save_data.end()};
+      std::vector<unsigned> counts;
+      std::vector<unsigned> per_chapter;
+      size_t c;
+      size_t flat = 0;
 
-      // Strip trailing zeroes
-      long unsigned int last = save.find_last_not_of('\0');
-      if (last == string::npos) // Nothing to unserialize ...
+      for (c = 0; c < chaps.size(); c++)
+      {
+         per_chapter.push_back((unsigned)chaps[c].levels().size());
+         for (size_t l = 0; l < chaps[c].levels().size(); l++)
+            counts.push_back(0);
+      }
+
+      if (counts.empty())
          return;
 
-      last++;
-      save = save.substr(0, last);
+      icy_save_decode(save_data.data(), save_data.size(), &counts[0],
+            &per_chapter[0], per_chapter.size());
 
-      if (log_cb)
-         log_cb(RETRO_LOG_INFO, "Dinothawr: Save file: \n%s\n", save.c_str());
-
-      std::vector<std::basic_string<char> > chapters = Utils::split(save, '\n');
-      std::vector<Icy::GameManager::Chapter>::iterator chap_itr = chaps.begin();
-      for (auto& chap : chapters)
+      for (c = 0; c < chaps.size(); c++)
       {
-         if (chap_itr == chaps.end())
-            return;
-
-         std::vector<std::basic_string<char> > levels = Utils::split(chap, ',');
-         std::vector<Icy::GameManager::Level>::iterator level_itr = chap_itr->levels().begin();
-         for (auto& level : levels)
+         for (size_t l = 0; l < chaps[c].levels().size(); l++, flat++)
          {
-            if (level_itr == chap_itr->levels().end())
-               break;
-
-            unsigned pushes = Utils::stoi(level);
-            level_itr->set_best_pushes(pushes);
-            level_itr->set_completion(pushes);
-            ++level_itr;
+            chaps[c].levels()[l].set_best_pushes(counts[flat]);
+            chaps[c].levels()[l].set_completion(counts[flat]);
          }
-
-         ++chap_itr;
       }
    }
 
