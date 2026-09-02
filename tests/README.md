@@ -55,6 +55,22 @@ Run both. The default covers gameplay, `INPUT=menu` covers the front
 end, and combined with `SRAM_LOAD` it covers the front end with levels
 already cleared, which is a third set of states again.
 
+## Running everything
+
+`tests/run.sh` runs every oracle below against the assets in this
+repository and checks them against known-good hashes, exiting non-zero
+on a mismatch.
+
+```
+make && make tests
+tests/run.sh
+```
+
+A hash going red means behaviour changed. That is sometimes intended -
+and then the hash is updated deliberately, in the same commit as the
+change that moved it. It is not a number to re-baseline when it is
+inconvenient.
+
 ## Solving a level
 
 `INPUT=solve` plays level_1-1 to completion: face the block, push it
