@@ -4,8 +4,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include <algorithm>
-#include <iterator>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -62,20 +60,6 @@ namespace Blit
             return ".";
       }
 
-      inline std::string tolower(const std::string& str)
-      {
-         std::string tmp;
-         std::transform(str.begin(), str.end(), std::back_inserter(tmp), [](char c) -> char { return ::tolower(c); });
-         return tmp;
-      }
-
-      inline std::string toupper(const std::string& str)
-      {
-         std::string tmp;
-         std::transform(str.begin(), str.end(), std::back_inserter(tmp), [](char c) -> char { return ::toupper(c); });
-         return tmp;
-      }
-
       // Mirrors std::stoi, as it doesn't seem to work on Mingw 64-bit.
       inline int stoi(const std::string& str)
       {
@@ -92,16 +76,6 @@ namespace Blit
             throw std::out_of_range("stoi");
 
          return res;
-      }
-
-      template <typename T>
-      inline typename T::mapped_type find_or_default(const T& mapper, const typename T::key_type& key, const typename T::mapped_type& def)
-      {
-         typename T::const_iterator itr = mapper.find(key);
-         if (itr == mapper.end())
-            return def;
-
-         return itr->second;
       }
 
    }
