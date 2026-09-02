@@ -32,9 +32,9 @@ namespace Blit
          Pos pos() const { return position; }
          void pos(Pos position);
          void move(Pos offset) { pos(position + offset); }
-         void render(RenderTarget& target) const;
-         void render_until_layer(unsigned index, RenderTarget& target) const;
-         void render_after_layer(unsigned index, RenderTarget& target) const;
+         void render(blit_render_target_t& target) const;
+         void render_until_layer(unsigned index, blit_render_target_t& target) const;
+         void render_after_layer(unsigned index, blit_render_target_t& target) const;
 
          int tile_width() const { return tilewidth; }
          int tile_height() const { return tileheight; }

@@ -60,7 +60,10 @@ namespace Icy
             chapters.push_back(std::move(chapter));
       }
 
-      ui_target = RenderTarget(Game::fb_width, Game::fb_height);
+      blit_render_target_release(&ui_target);
+      if (!blit_render_target_init_size(&ui_target, Game::fb_width,
+               Game::fb_height))
+         throw std::bad_alloc();
 
    }
 
@@ -83,6 +86,8 @@ namespace Icy
     * nothing releases them either. */
    void GameManager::init_menu_surfaces()
    {
+      blit_render_target_init(&target);
+      blit_render_target_init(&ui_target);
       blit_surface_init(&lock_sprite);
       blit_surface_init(&level_complete);
       blit_surface_init(&level_select_bg);
@@ -92,6 +97,8 @@ namespace Icy
 
    GameManager::~GameManager()
    {
+      blit_render_target_release(&target);
+      blit_render_target_release(&ui_target);
       blit_surface_release(&lock_sprite);
       blit_surface_release(&level_complete);
       blit_surface_release(&level_select_bg);
@@ -228,8 +235,11 @@ namespace Icy
       blit_surface_t surf = Blit::surface_cache().from_image(
             Utils::join(dir, "/", level));
 
-      target = RenderTarget(Game::fb_width, Game::fb_height);
-      target.blit(&surf, blit_rect_zero());
+      blit_render_target_release(&target);
+      if (!blit_render_target_init_size(&target, Game::fb_width,
+               Game::fb_height))
+         throw std::bad_alloc();
+      blit_render_target_blit(&target, &surf, blit_rect_zero());
       blit_surface_release(&surf);
 
       font.set_id("yellow");
@@ -315,7 +325,7 @@ namespace Icy
          enter_menu();
       }
 
-      m_video_cb(target.buffer(), target.width(), target.height(), target.width() * sizeof(Pixel));
+      m_video_cb(target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::enter_menu()
@@ -327,7 +337,8 @@ namespace Icy
       m_game_state = State::Menu;
       level_select = m_current_level;
       chap_select  = m_current_chap;
-      ui_target.camera_set({preview_delta_x * level_select, preview_delta_y * chap_select});
+      ui_target.rect.pos = blit_pos(preview_delta_x * level_select,
+            preview_delta_y * chap_select);
    }
 
    void GameManager::menu_render_ui()
@@ -336,11 +347,11 @@ namespace Icy
       {
          unsigned chap = chap_select;
          if (chap < chapters.size() - 1 && !chapters[chap_select].cleared())
-            ui_target.blit(&lock_sprite, blit_rect_zero());
+            blit_render_target_blit(&ui_target, &lock_sprite, blit_rect_zero());
 
          // Render tick if level is complete.
          if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
-            ui_target.blit(&level_complete, blit_rect_zero());
+            blit_render_target_blit(&ui_target, &level_complete, blit_rect_zero());
 
          font.set_id("white");
          font.render_msg(ui_target, Utils::join(chap_select + 1,
@@ -365,7 +376,7 @@ namespace Icy
 
       want = blit_pos(slide_total.x * (int)slide_cnt / (int)slide_end,
                  slide_total.y * (int)slide_cnt / (int)slide_end);
-      ui_target.camera_move(want - slide_moved);
+      ui_target.rect.pos += want - slide_moved;
       slide_moved = want;
 
       if (slide_cnt >= slide_end)
@@ -374,7 +385,7 @@ namespace Icy
          menu_slide_dir = {};
       }
 
-      ui_target.blit(&level_select_bg, blit_rect_zero());
+      blit_render_target_blit(&ui_target, &level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -382,7 +393,7 @@ namespace Icy
 
       menu_render_ui();
 
-      m_video_cb(ui_target.buffer(), ui_target.width(), ui_target.height(), ui_target.width() * sizeof(Pixel));
+      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    const GameManager::Level& GameManager::get_selected_level() const
@@ -409,7 +420,7 @@ namespace Icy
 
    void GameManager::step_menu()
    {
-      ui_target.blit(&level_select_bg, blit_rect_zero());
+      blit_render_target_blit(&ui_target, &level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -493,7 +504,7 @@ namespace Icy
       old_pressed_menu_ok     = pressed_menu_ok;
       old_pressed_menu        = pressed_menu;
 
-      m_video_cb(ui_target.buffer(), ui_target.width(), ui_target.height(), ui_target.width() * sizeof(Pixel));
+      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::step_game()
@@ -555,7 +566,7 @@ namespace Icy
 
    void GameManager::step_end()
    {
-      ui_target.blit(&end_credit_bg, blit_rect_zero());
+      blit_render_target_blit(&ui_target, &end_credit_bg, blit_rect_zero());
 
       bool pressed_menu_ok = m_input_cb(Input::Push);
       bool trigger_ok = pressed_menu_ok && !old_pressed_menu_ok;
@@ -569,7 +580,7 @@ namespace Icy
 
       font.set_id("white");
       font.render_msg(ui_target, "You completed all levels!\nAwesome! :D\nThanks for playing Dinothawr!", 160, 155, Font::RenderAlignment::Centered, 2);
-      m_video_cb(ui_target.buffer(), ui_target.width(), ui_target.height(), ui_target.width() * sizeof(Pixel));
+      m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
 
    void GameManager::iterate()
@@ -667,10 +678,10 @@ namespace Icy
       pos(blit_pos(Game::fb_width, Game::fb_height) / scale_factor - blit_pos(5, 5));
    }
 
-   void GameManager::Level::render(RenderTarget& target) const
+   void GameManager::Level::render(blit_render_target_t& target) const
    {
       //preview.rect().pos = position;
-      target.blit_offset(&preview, blit_rect_zero(), position);
+      blit_render_target_blit_offset(&target, &preview, blit_rect_zero(), position);
    }
 
    GameManager::SaveManager::SaveManager(vector<GameManager::Chapter> &chaps)

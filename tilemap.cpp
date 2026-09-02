@@ -238,19 +238,19 @@ namespace Blit
       this->position = position;
    }
 
-   void Tilemap::render(RenderTarget& target) const
+   void Tilemap::render(blit_render_target_t& target) const
    {
       for (auto& layer : m_layers)
          layer.cluster.render(target);
    }
 
-   void Tilemap::render_until_layer(unsigned index, RenderTarget& target) const
+   void Tilemap::render_until_layer(unsigned index, blit_render_target_t& target) const
    {
       for (unsigned i = 0; i <= index; i++)
          m_layers.at(i).cluster.render(target);
    }
 
-   void Tilemap::render_after_layer(unsigned index, RenderTarget& target) const
+   void Tilemap::render_after_layer(unsigned index, blit_render_target_t& target) const
    {
       for (unsigned i = index + 1; i < m_layers.size(); i++)
          m_layers.at(i).cluster.render(target);

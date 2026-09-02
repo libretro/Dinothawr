@@ -146,7 +146,7 @@ namespace Blit
             throw std::bad_alloc();
    }
 
-   void Font::render_msg(RenderTarget& target, const string& str, int x, int y,
+   void Font::render_msg(blit_render_target_t& target, const string& str, int x, int y,
          Font::RenderAlignment dir,
          int newline_offset) const
    {
@@ -158,7 +158,7 @@ namespace Blit
          x -= Font::adjust_x(*line, dir);
          for (std::string::iterator c = line->begin(); c!=line->end(); c++)
          {
-            target.blit_offset(&surface(*c), blit_rect_zero(),
+            blit_render_target_blit_offset(&target, &surface(*c), blit_rect_zero(),
                   blit_pos(x, y));
             x += glyphwidth;
          }
@@ -214,7 +214,7 @@ namespace Blit
       return blit_pos(max_x->glyph_size().x, max_y->glyph_size().y);
    }
 
-   void FontCluster::render_msg(RenderTarget& target, const string& msg,
+   void FontCluster::render_msg(blit_render_target_t& target, const string& msg,
          int x, int y,
          Font::RenderAlignment dir,
          int newline_offset) const
@@ -230,7 +230,7 @@ namespace Blit
    FontCluster::OffsetFont::OffsetFont(const string& font) : Font(font)
    {}
 
-   void FontCluster::OffsetFont::render_msg(RenderTarget& target, const string& msg,
+   void FontCluster::OffsetFont::render_msg(blit_render_target_t& target, const string& msg,
          int x, int y,
          Font::RenderAlignment dir,
          int newline_offset) const

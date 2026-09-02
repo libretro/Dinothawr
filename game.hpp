@@ -142,11 +142,11 @@ namespace Icy
    class CameraManager
    {
       public:
-         CameraManager(Blit::RenderTarget& target, const Blit::Rect& rect, Blit::Pos map_size);
+         CameraManager(blit_render_target_t& target, const Blit::Rect& rect, Blit::Pos map_size);
          void update();
 
       private:
-         Blit::RenderTarget* target;
+         blit_render_target_t* target;
          const Blit::Rect* rect;
          Blit::Pos map_size;
    };
@@ -197,7 +197,7 @@ namespace Icy
 
       private:
          Blit::Tilemap map;
-         Blit::RenderTarget target;
+         blit_render_target_t target;
          blit_surface_t player;
          Blit::Pos player_off;
          Blit::FontCluster *font;
@@ -351,7 +351,7 @@ namespace Icy
                void set_name(const std::string& name) { m_name = name; }
                const std::string& name() const { return m_name; }
 
-               void render(Blit::RenderTarget& target) const;
+               void render(blit_render_target_t& target) const;
 
                void set_completion(bool state) { completion = state; }
                bool get_completion() const { return completion; }
@@ -436,9 +436,9 @@ namespace Icy
          unsigned m_current_level;
          State m_game_state;
 
-         Blit::RenderTarget target;
+         blit_render_target_t target;
 
-         Blit::RenderTarget ui_target;
+         blit_render_target_t ui_target;
          Blit::FontCluster font;
 
          blit_surface_t lock_sprite;

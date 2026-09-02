@@ -20,13 +20,15 @@ namespace Icy
    }
 
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font)
-      : map(level_path), target(fb_width, fb_height),
+      : map(level_path),
          player_off(blit_pos_zero()), font(&font),
          camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
    {
+      if (!blit_render_target_init_size(&target, fb_width, fb_height))
+         throw std::bad_alloc();
       /* player is a raw surface: no constructor to zero it, and the
        * destructor below is what releases it. */
       blit_surface_init(&player);
@@ -36,12 +38,14 @@ namespace Icy
    }
 
    Game::Game(const string& level_path)
-      : map(level_path), target(fb_width, fb_height),
+      : map(level_path),
          player_off(blit_pos_zero()), font(NULL),
          camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), push(true)
    {
+      if (!blit_render_target_init_size(&target, fb_width, fb_height))
+         throw std::bad_alloc();
       blit_surface_init(&player);
       m_won_early = false;
       set_initial_pos(level_path);
@@ -50,6 +54,7 @@ namespace Icy
 
    Game::~Game()
    {
+      blit_render_target_release(&target);
       blit_surface_release(&player);
    }
 
@@ -107,14 +112,14 @@ namespace Icy
       update_player();
 
       if (bg)
-         target.blit(bg, blit_rect_zero());
+         blit_render_target_blit(&target, bg, blit_rect_zero());
       else
-         target.clear(blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
+         blit_render_target_clear(&target, blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 
       camera.update();
 
       map.render(target);
-      target.blit_offset(&player, blit_rect_zero(), player_off);
+      blit_render_target_blit_offset(&target, &player, blit_rect_zero(), player_off);
 
       if (font)
       {
@@ -128,7 +133,7 @@ namespace Icy
       }
 
       if (m_video_cb)
-         m_video_cb(target.buffer(), target.width(), target.height(), target.width() * sizeof(Pixel));
+         m_video_cb(target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
    }
 
    /* A plain scan rather than copy_if over a reference_wrapper vector:
@@ -491,21 +496,21 @@ namespace Icy
          stepper = {};
    }
 
-   CameraManager::CameraManager(RenderTarget& target, const Rect& rect, Blit::Pos map_size)
+   CameraManager::CameraManager(blit_render_target_t& target, const Rect& rect, Blit::Pos map_size)
       : target(&target), rect(&rect), map_size(map_size)
    {}
 
    void CameraManager::update()
    {
       // Map can fit completely inside our rect, just center it.
-      if (target->width() >= map_size.x && target->height() >= map_size.y)
-         target->camera_set((map_size - blit_pos(target->width(), target->height())) / 2);
+      if (target->rect.w >= map_size.x && target->rect.h >= map_size.y)
+         target->rect.pos = ((map_size - blit_pos(target->rect.w, target->rect.h)) / 2);
       else // Center around player, but clamp if player isn't near walls.
       {
          Blit::Pos pos = rect->pos;
          pos += blit_pos(rect->w, rect->h) / 2;
 
-         Pos target_size = blit_pos(target->width(), target->height());
+         Pos target_size = blit_pos(target->rect.w, target->rect.h);
 
          Blit::Pos pos_base = pos - target_size / 2;
          Blit::Pos pos_max  = pos_base + target_size;
@@ -520,7 +525,7 @@ namespace Icy
          else if (pos_max.y > map_size.y)
             pos_base.y -= pos_max.y - map_size.y;
 
-         target->camera_set(pos_base);
+         target->rect.pos = (pos_base);
       }
    }
 }

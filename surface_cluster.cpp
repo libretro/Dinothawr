@@ -2,8 +2,8 @@
 
 namespace Blit
 {
-   void SurfaceCluster::render(RenderTarget& target) const
+   void SurfaceCluster::render(blit_render_target_t& target) const
    {
-      blit_surface_cluster_render(&c, &target.raw(), position);
+      blit_surface_cluster_render(&c, &target, position);
    }
 }

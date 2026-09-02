@@ -24,7 +24,6 @@ namespace Blit
     * scratch target. The caller owns the result. */
    blit_surface_t surface_sub(const blit_surface_t& src, Rect rect);
 
-   class RenderTarget;
 
    /* A wrapper over blit_surface_cluster_t, so the engine's Renderable
     * dispatch still reaches it. The elements belong to the C struct;
@@ -99,7 +98,7 @@ namespace Blit
          const Elem* find(Pos offset) const
          { return blit_surface_cluster_find(&c, offset); }
 
-         void render(RenderTarget& target) const;
+         void render(blit_render_target_t& target) const;
 
       private:
          Pos position;
@@ -161,103 +160,6 @@ namespace Blit
     * retro_run - the core's only worker threads decode audio. */
    SurfaceCache& surface_cache();
 
-   /* A value-semantics shim over blit_render_target_t, for the engine
-    * code that still holds one by value. Everything forwards. */
-   class RenderTarget
-   {
-      public:
-         RenderTarget() { blit_render_target_init(&t); }
-
-         RenderTarget(int width, int height)
-         {
-            if (!blit_render_target_init_size(&t, width, height))
-               throw std::bad_alloc();
-         }
-
-         /* A target owns its pixels outright, so a copy is a deep copy.
-          * Only the move is on any hot path - ui_target is assigned from
-          * a temporary when a game loads. */
-         RenderTarget(const RenderTarget& other)
-         {
-            if (!blit_render_target_init_size(&t, other.t.rect.w,
-                     other.t.rect.h))
-               throw std::bad_alloc();
-            if (other.t.buffer)
-               std::memcpy(t.buffer, other.t.buffer,
-                     other.t.count * sizeof(Pixel));
-            t.rect = other.t.rect;
-         }
-
-         RenderTarget& operator=(const RenderTarget& other)
-         {
-            if (this != &other)
-            {
-               RenderTarget copy(other);
-               *this = std::move(copy);
-            }
-            return *this;
-         }
-
-         RenderTarget(RenderTarget&& other) : t(other.t)
-         { blit_render_target_init(&other.t); }
-
-         RenderTarget& operator=(RenderTarget&& other)
-         {
-            if (this != &other)
-            {
-               blit_render_target_release(&t);
-               t = other.t;
-               blit_render_target_init(&other.t);
-            }
-            return *this;
-         }
-
-         ~RenderTarget() { blit_render_target_release(&t); }
-
-         /* Hands the buffer over as a surface the caller owns. */
-         blit_surface_t convert_surface();
-
-         const Pixel* buffer() const { return t.buffer; }
-
-         Pixel* pixel_raw(Pos pos)
-         {
-            Pixel *pixel = blit_render_target_pixel_raw(&t, pos);
-            if (!pixel)
-               pixel_out_of_bounds(blit_pos_sub(pos, t.rect.pos));
-            return pixel;
-         }
-
-         Pixel* pixel_raw_no_offset(Pos pos)
-         {
-            Pixel *pixel = blit_render_target_pixel_raw_no_offset(&t, pos);
-            if (!pixel)
-               pixel_out_of_bounds(pos);
-            return pixel;
-         }
-
-         int width() const { return t.rect.w; }
-         int height() const { return t.rect.h; }
-
-         void clear(Pixel pix) { blit_render_target_clear(&t, pix); }
-
-         void camera_move(Pos pos) { t.rect.pos += pos; }
-         void camera_set(Pos pos) { t.rect.pos = pos; }
-         Pos camera_pos() const { return t.rect.pos; }
-
-         void blit(const blit_surface_t *surf, Rect subrect)
-         { blit_render_target_blit(&t, surf, subrect); }
-
-         void blit_offset(const blit_surface_t *surf, Rect subrect, Pos offset)
-         { blit_render_target_blit_offset(&t, surf, subrect, offset); }
-
-         blit_render_target_t& raw() { return t; }
-
-      private:
-         /* Always throws; never returns. */
-         void pixel_out_of_bounds(Pos pos) const;
-
-         blit_render_target_t t;
-   };
 }
 
 #endif

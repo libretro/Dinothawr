@@ -32,7 +32,7 @@ namespace Blit
             Centered
          };
 
-         void render_msg(RenderTarget& target, const std::string& msg, int x, int y,
+         void render_msg(blit_render_target_t& target, const std::string& msg, int x, int y,
                RenderAlignment dir, int newline_offset) const;
 
          void set_color(Pixel pix);
@@ -61,7 +61,7 @@ namespace Blit
 
          void add_font(const std::string& font, Pos offset, Pixel color, std::string id = "");
          void set_id(std::string id);
-         void render_msg(RenderTarget& target, const std::string& msg, int x, int y,
+         void render_msg(blit_render_target_t& target, const std::string& msg, int x, int y,
                Font::RenderAlignment dir = Font::Left, int newline_offset = 0) const;
 
       private:
@@ -72,7 +72,7 @@ namespace Blit
             }
             OffsetFont(const std::string& font);
 
-            void render_msg(RenderTarget& target, const std::string& msg, int x, int y,
+            void render_msg(blit_render_target_t& target, const std::string& msg, int x, int y,
                   Font::RenderAlignment dir, int newline_offset) const;
             Pos offset;
          };
