@@ -98,29 +98,36 @@ namespace Blit
       if (!width || !height || !glyphwidth || !glyphheight)
          throw logic_error("Invalid glpyh arguments.");
 
-      Surface surf = Blit::surface_cache().from_image(Utils::join(dir, "/", source));
+      blit_surface_t surf = Blit::surface_cache().from_image(
+            Utils::join(dir, "/", source));
 
-      if (surf.rect().w != width * glyphwidth || surf.rect().h != height * glyphheight)
+      if (surf.rect.w != width * glyphwidth || surf.rect.h != height * glyphheight)
+      {
+         blit_surface_release(&surf);
          throw logic_error("Geometry of font and attributes do not match.");
+      }
 
       for (int y = 0; y < height; y++)
       {
          for (int x = 0; x < width; x++, start_ascii++)
          {
             {
-               unsigned char slot = (unsigned char)start_ascii;
-               Surface glyph = surf.sub(
+               unsigned char  slot  = (unsigned char)start_ascii;
+               blit_surface_t glyph = surface_sub(surf,
                      blit_rect(blit_pos(x * glyphwidth, y * glyphheight),
                         glyphwidth, glyphheight));
 
-               glyph.ignore_camera(true);
+               glyph.ignore_camera = 1;
 
-               surf_map[slot] = glyph.raw();
-               blit_surface_retain(&surf_map[slot]);
+               /* surface_sub hands over ownership, so this takes it
+                * rather than copying and retaining. */
+               surf_map[slot]     = glyph;
                surf_present[slot] = true;
             }
          }
       }
+
+      blit_surface_release(&surf);
    }
 
    const blit_surface_t& Font::surface(char c) const

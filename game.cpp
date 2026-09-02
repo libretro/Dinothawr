@@ -80,14 +80,14 @@ namespace Icy
       {
          /* The cache hands back a wrapper; take the raw surface out of
           * it and keep our own reference. */
-         Surface sprite = sprite_path.empty()
+         blit_surface_t sprite = sprite_path.empty()
             ? Blit::surface_cache().from_sprite(Utils::join(level, ".sprite"))
             : Blit::surface_cache().from_sprite(
                   Utils::join(Utils::basedir(level), "/", sprite_path));
 
+         /* from_sprite hands over ownership. */
          blit_surface_release(&player);
-         player = sprite.raw();
-         blit_surface_retain(&player);
+         player = sprite;
       }
 
       int x     = Utils::stoi(Utils::find_or_default(layer->attr, "start_x", "1"));
@@ -107,7 +107,7 @@ namespace Icy
       update_player();
 
       if (bg)
-         target.blit(bg, blit_rect_zero(), blit_pos_zero());
+         target.blit(bg, blit_rect_zero());
       else
          target.clear(blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 

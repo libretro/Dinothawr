@@ -4,19 +4,17 @@
 
 namespace Blit
 {
-   Surface RenderTarget::convert_surface()
+   blit_surface_t RenderTarget::convert_surface()
    {
       blit_surface_data_t *data = blit_render_target_to_data(&t);
+      blit_surface_t       out;
 
       if (!data)
          throw std::bad_alloc();
 
-      {
-         /* Surface takes its own reference. */
-         Surface out(data);
-         blit_surface_data_unref(data);
-         return out;
-      }
+      blit_surface_init_data(&out, data);
+      blit_surface_data_unref(data);
+      return out;
    }
 
    /* Out of line: the check that calls this inlines at every access, and

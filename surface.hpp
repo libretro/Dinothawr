@@ -20,117 +20,9 @@
 
 namespace Blit
 {
-   /* A value-semantics shim over blit_surface_t. It holds one and does
-    * the retain and release the C struct expects around copies, so the
-    * engine code that is still C++ can keep putting Surfaces in
-    * std::map and std::vector. Everything it does is a forward to
-    * blit_surface.h; when the containers go, so does this. */
-   class Surface
-   {
-      public:
-         typedef blit_surface_data_t Data;
-
-         Surface() { blit_surface_init(&s); }
-
-         Surface(Pixel pix, int width, int height)
-         {
-            if (!blit_surface_init_filled(&s, pix, width, height))
-               throw std::bad_alloc();
-         }
-
-         /* Takes its own reference; the caller keeps theirs. */
-         Surface(Data *data) { blit_surface_init_data(&s, data); }
-
-         /* Shows @start_id from @alts, taking its own reference on the
-          * table. */
-         Surface(blit_alt_table_t *alts, const char *start_id);
-
-         Surface(const Surface& other) : s(other.s)
-         { blit_surface_retain(&s); }
-
-         Surface& operator=(const Surface& other)
-         {
-            if (this != &other)
-            {
-               /* Retain before release: an assignment from a Surface
-                * sharing our tables would otherwise free them first. */
-               blit_surface_retain(&other.s);
-               blit_surface_release(&s);
-               s = other.s;
-            }
-            return *this;
-         }
-
-         /* Declaring the copy operations suppresses the implicit move
-          * ones, and this type is moved a lot: SurfaceCluster keeps its
-          * elements in a vector it sorts every frame. */
-         Surface(Surface&& other) : s(other.s)
-         { blit_surface_init(&other.s); }
-
-         Surface& operator=(Surface&& other)
-         {
-            if (this != &other)
-            {
-               blit_surface_release(&s);
-               s = other.s;
-               blit_surface_init(&other.s);
-            }
-            return *this;
-         }
-
-         ~Surface() { blit_surface_release(&s); }
-
-         Surface sub(Rect rect) const;
-         void refill_color(Pixel pix)
-         {
-            if (!blit_surface_refill_color(&s, pix))
-               throw std::bad_alloc();
-         }
-
-         Rect& rect() { return s.rect; }
-         const Rect& rect() const { return s.rect; }
-
-         void ignore_camera(bool ignore) { s.ignore_camera = ignore; }
-         bool ignore_camera() const { return s.ignore_camera != 0; }
-
-         Pixel pixel(Pos pos) const { return blit_surface_pixel(&s, pos); }
-
-         const Pixel* pixel_raw(Pos pos) const
-         {
-            const Pixel *pixel = blit_surface_pixel_raw(&s, pos);
-            if (!pixel)
-               pixel_raw_out_of_bounds(pos);
-            return pixel;
-         }
-
-         void active_alt(const std::string& id, unsigned index = 0);
-         void active_alt_index(unsigned index)
-         { active_alt(s.active_alt ? s.active_alt : "", index); }
-
-         /* The value for @key, or NULL when the tile has no such
-          * attribute. */
-         const char *attr(const char *key) const
-         { return blit_attr_table_find(s.attribs, key); }
-
-         /* Copy-on-write: a shared table is cloned before the write, so
-          * one tile's attributes never reach another's view. */
-         void set_attr(const char *key, const char *value)
-         {
-            if (!blit_surface_set_attr(&s, key, value))
-               throw std::bad_alloc();
-         }
-
-         const blit_attr_table_t *attr_table() const { return s.attribs; }
-
-         const blit_surface_t& raw() const { return s; }
-         blit_surface_t& raw() { return s; }
-
-      private:
-         /* Always throws; never returns. */
-         void pixel_raw_out_of_bounds(Pos pos) const;
-
-         blit_surface_t s;
-   };
+   /* A sub-rectangle of @src as its own surface, rendered through a
+    * scratch target. The caller owns the result. */
+   blit_surface_t surface_sub(const blit_surface_t& src, Rect rect);
 
    class RenderTarget;
 
@@ -192,9 +84,6 @@ namespace Blit
 
          ~SurfaceCluster() { blit_surface_cluster_release(&c); }
 
-         void add(const Surface& surf, Pos offset)
-         { add(&surf.raw(), offset); }
-
          void add(const blit_surface_t *surf, Pos offset)
          {
             if (!blit_surface_cluster_add(&c, surf, offset))
@@ -223,11 +112,12 @@ namespace Blit
          SurfaceCache();
          ~SurfaceCache();
 
-         Surface from_image(const std::string& path);
-         Surface from_sprite(const std::string& path);
+         /* Each hands back a surface the caller owns and must release. */
+         blit_surface_t from_image(const std::string& path);
+         blit_surface_t from_sprite(const std::string& path);
          /* One frame of an APNG as a standalone surface; the whole
           * animation is decoded and cached on the first request. */
-         Surface from_animation(const std::string& path, unsigned frame);
+         blit_surface_t from_animation(const std::string& path, unsigned frame);
 
       private:
          /* Session-long, never evicted: one reference per entry, all
@@ -245,12 +135,12 @@ namespace Blit
             char             *start_id;
          };
          blit_str_map_t *sprites;
-         Surface::Data *load_image(const std::string& path);
+         blit_surface_data_t *load_image(const std::string& path);
          /* Face inside an APNG: decodes the whole animation on the first
           * request for any of its frames and fills one cache entry per
           * frame under "path#N" keys, so the file is read and decoded
           * once however many faces reference it. */
-         Surface::Data *load_apng_frame(
+         blit_surface_data_t *load_apng_frame(
                const std::string& path, unsigned frame);
    };
 
@@ -263,7 +153,7 @@ namespace Blit
     * across levels, so they were re-read and re-decoded once per level -
     * about 2100 file opens over a session where 57 files exist.
     *
-    * Sharing is safe because Surface::Data is immutable once cached:
+    * Sharing is safe because blit_surface_data_t is immutable once cached:
     * Surface::pixel_raw is a const accessor, and refill_color swaps in
     * a fresh Data rather than writing through the shared one.
     * The only mutable pixel buffer is RenderTarget's, which is its own.
@@ -324,7 +214,8 @@ namespace Blit
 
          ~RenderTarget() { blit_render_target_release(&t); }
 
-         Surface convert_surface();
+         /* Hands the buffer over as a surface the caller owns. */
+         blit_surface_t convert_surface();
 
          const Pixel* buffer() const { return t.buffer; }
 
@@ -353,14 +244,8 @@ namespace Blit
          void camera_set(Pos pos) { t.rect.pos = pos; }
          Pos camera_pos() const { return t.rect.pos; }
 
-         void blit(const Surface& surf, Rect subrect)
-         { blit_render_target_blit(&t, &surf.raw(), subrect); }
-
-         void blit(const blit_surface_t *surf, Rect subrect, Pos)
+         void blit(const blit_surface_t *surf, Rect subrect)
          { blit_render_target_blit(&t, surf, subrect); }
-
-         void blit_offset(const Surface& surf, Rect subrect, Pos offset)
-         { blit_render_target_blit_offset(&t, &surf.raw(), subrect, offset); }
 
          void blit_offset(const blit_surface_t *surf, Rect subrect, Pos offset)
          { blit_render_target_blit_offset(&t, surf, subrect, offset); }

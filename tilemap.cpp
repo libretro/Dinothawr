@@ -104,24 +104,25 @@ namespace Blit
          for (; id_cnt < count; id_cnt++)
          {
             int id = first_gid + id_cnt;
-            Surface tile = surface_cache().from_animation(path, id_cnt);
+            blit_surface_t tile = surface_cache().from_animation(path, id_cnt);
 
-            if (tile.rect().w != tilewidth || tile.rect().h != tileheight)
+            if (tile.rect.w != tilewidth || tile.rect.h != tileheight)
                throw std::logic_error("Tilemap geometry does not correspond with image values.");
 
             for (std::map<std::string, std::string>::const_iterator ga =
                   global_attr.begin(); ga != global_attr.end(); ++ga)
-               tile.set_attr(ga->first.c_str(), ga->second.c_str());
+               blit_surface_set_attr(&tile, ga->first.c_str(), ga->second.c_str());
 
-            if (!blit_tile_set_put(tiles, id, &tile.raw()))
+            if (!blit_tile_set_put(tiles, id, &tile))
                throw std::bad_alloc();
+            blit_surface_release(&tile);
          }
       }
       else
       {
-         Blit::Surface surf = surface_cache().from_image(path);
+         blit_surface_t surf = surface_cache().from_image(path);
 
-         if (surf.rect().w != width || surf.rect().h != height)
+         if (surf.rect.w != width || surf.rect.h != height)
             throw std::logic_error("Tilemap geometry does not correspond with image values.");
 
          for (int y = 0; y < height; y += tileheight)
@@ -129,16 +130,20 @@ namespace Blit
             for (int x = 0; x < width; x += tilewidth, id_cnt++)
             {
                int id = first_gid + id_cnt;
-               Surface tile = surf.sub({{x, y}, tilewidth, tileheight});
+               blit_surface_t tile = surface_sub(surf,
+                     blit_rect(blit_pos(x, y), tilewidth, tileheight));
 
                for (std::map<std::string, std::string>::const_iterator ga =
                      global_attr.begin(); ga != global_attr.end(); ++ga)
-                  tile.set_attr(ga->first.c_str(), ga->second.c_str());
+                  blit_surface_set_attr(&tile, ga->first.c_str(), ga->second.c_str());
 
-               if (!blit_tile_set_put(tiles, id, &tile.raw()))
+               if (!blit_tile_set_put(tiles, id, &tile))
                   throw std::bad_alloc();
+               blit_surface_release(&tile);
             }
          }
+
+         blit_surface_release(&surf);
       }
 
       // Load all attributes for a tile into the surface.
@@ -153,11 +158,12 @@ namespace Blit
 
          if (itr != attrs.end())
          {
-            Surface sprite_tile = surface_cache().from_sprite(
+            blit_surface_t sprite_tile = surface_cache().from_sprite(
                   Utils::join(dir, "/", itr->second));
 
-            if (!blit_tile_set_put(tiles, id, &sprite_tile.raw()))
+            if (!blit_tile_set_put(tiles, id, &sprite_tile))
                throw std::bad_alloc();
+            blit_surface_release(&sprite_tile);
          }
 
          {

@@ -102,17 +102,19 @@ namespace Icy
    void GameManager::init_menu_sprite(Blit::Xml::Node game_node)
    {
       {
-         Blit::Surface tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::surface_cache().from_image(
                Utils::join(dir, "/",
                   game_node.child("level_complete").attribute("source").value()));
-         blit_surface_assign(&level_complete, &tmp.raw());
+         blit_surface_assign(&level_complete, &tmp);
+         blit_surface_release(&tmp);
       }
 
       {
-         Blit::Surface tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::surface_cache().from_image(
                Utils::join(dir, "/",
                   game_node.child("lock_sprite").attribute("source").value()));
-         blit_surface_assign(&lock_sprite, &tmp.raw());
+         blit_surface_assign(&lock_sprite, &tmp);
+         blit_surface_release(&tmp);
       }
       lock_sprite.ignore_camera = 1;
       int arrow_x = (Game::fb_width - lock_sprite.rect.w) / 2;
@@ -124,26 +126,29 @@ namespace Icy
       level_complete.ignore_camera = 1;
 
       {
-         Blit::Surface tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::surface_cache().from_image(
                Utils::join(dir, "/",
                   game_node.child("menu_bg").attribute("source").value()));
-         blit_surface_assign(&level_select_bg, &tmp.raw());
+         blit_surface_assign(&level_select_bg, &tmp);
+         blit_surface_release(&tmp);
       }
       level_select_bg.ignore_camera = 1;
 
       {
-         Blit::Surface tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::surface_cache().from_image(
                Utils::join(dir, "/",
                   game_node.child("end_bg").attribute("source").value()));
-         blit_surface_assign(&end_credit_bg, &tmp.raw());
+         blit_surface_assign(&end_credit_bg, &tmp);
+         blit_surface_release(&tmp);
       }
       end_credit_bg.ignore_camera = 1;
 
       {
-         Blit::Surface tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::surface_cache().from_image(
                Utils::join(dir, "/",
                   game_node.child("game_bg").attribute("source").value()));
-         blit_surface_assign(&game_bg, &tmp.raw());
+         blit_surface_assign(&game_bg, &tmp);
+         blit_surface_release(&tmp);
       }
       game_bg.ignore_camera = 1;
    }
@@ -220,10 +225,12 @@ namespace Icy
 
    void GameManager::init_menu(const string& level)
    {
-      Surface surf = Blit::surface_cache().from_image(Utils::join(dir, "/", level));
+      blit_surface_t surf = Blit::surface_cache().from_image(
+            Utils::join(dir, "/", level));
 
       target = RenderTarget(Game::fb_width, Game::fb_height);
-      target.blit(surf, blit_rect_zero());
+      target.blit(&surf, blit_rect_zero());
+      blit_surface_release(&surf);
 
       font.set_id("yellow");
       font.render_msg(target, "Press OK/Push button", 160, 170, Font::RenderAlignment::Centered);
@@ -329,11 +336,11 @@ namespace Icy
       {
          unsigned chap = chap_select;
          if (chap < chapters.size() - 1 && !chapters[chap_select].cleared())
-            ui_target.blit(&lock_sprite, blit_rect_zero(), blit_pos_zero());
+            ui_target.blit(&lock_sprite, blit_rect_zero());
 
          // Render tick if level is complete.
          if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
-            ui_target.blit(&level_complete, blit_rect_zero(), blit_pos_zero());
+            ui_target.blit(&level_complete, blit_rect_zero());
 
          font.set_id("white");
          font.render_msg(ui_target, Utils::join(chap_select + 1,
@@ -367,7 +374,7 @@ namespace Icy
          menu_slide_dir = {};
       }
 
-      ui_target.blit(&level_select_bg, blit_rect_zero(), blit_pos_zero());
+      ui_target.blit(&level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -402,7 +409,7 @@ namespace Icy
 
    void GameManager::step_menu()
    {
-      ui_target.blit(&level_select_bg, blit_rect_zero(), blit_pos_zero());
+      ui_target.blit(&level_select_bg, blit_rect_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -548,7 +555,7 @@ namespace Icy
 
    void GameManager::step_end()
    {
-      ui_target.blit(&end_credit_bg, blit_rect_zero(), blit_pos_zero());
+      ui_target.blit(&end_credit_bg, blit_rect_zero());
 
       bool pressed_menu_ok = m_input_cb(Input::Push);
       bool trigger_ok = pressed_menu_ok && !old_pressed_menu_ok;
@@ -643,7 +650,7 @@ namespace Icy
 
       {
          /* Surface takes its own reference; drop the one we made. */
-         Blit::Surface::Data *pdata;
+         blit_surface_data_t *pdata;
 
          owned = (Pixel*)malloc(data.size() * sizeof(Pixel));
          if (!owned)

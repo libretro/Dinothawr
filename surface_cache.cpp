@@ -15,10 +15,11 @@ namespace Blit
       return cache;
    }
 
-   Surface SurfaceCache::from_image(const std::string& path)
+   blit_surface_t SurfaceCache::from_image(const std::string& path)
    {
-      Surface::Data *ptr = (Surface::Data*)blit_str_map_find(cache,
+      blit_surface_data_t *ptr = (blit_surface_data_t*)blit_str_map_find(cache,
             path.c_str());
+      blit_surface_t out;
 
       if (!ptr)
       {
@@ -27,12 +28,15 @@ namespace Blit
             throw std::bad_alloc();
       }
 
-      return Surface(ptr);
+      blit_surface_init_data(&out, ptr);
+      return out;
    }
 
-   Surface SurfaceCache::from_animation(const std::string& path, unsigned frame)
+   blit_surface_t SurfaceCache::from_animation(const std::string& path, unsigned frame)
    {
-      return Surface(load_apng_frame(path, frame));
+      blit_surface_t out;
+      blit_surface_init_data(&out, load_apng_frame(path, frame));
+      return out;
    }
 
    SurfaceCache::SurfaceCache()
@@ -51,7 +55,7 @@ namespace Blit
 
       for (i = 0; i < blit_str_map_count(cache); i++)
          blit_surface_data_unref(
-               (Surface::Data*)blit_str_map_value_at(cache, i));
+               (blit_surface_data_t*)blit_str_map_value_at(cache, i));
 
       for (i = 0; i < blit_str_map_count(sprites); i++)
       {
@@ -65,13 +69,18 @@ namespace Blit
       blit_str_map_free(sprites);
    }
 
-   Surface SurfaceCache::from_sprite(const std::string& path)
+   blit_surface_t SurfaceCache::from_sprite(const std::string& path)
    {
       SpriteDef *cached = (SpriteDef*)blit_str_map_find(sprites,
             path.c_str());
 
       if (cached)
-         return Surface(cached->alts, cached->start_id);
+      {
+         blit_surface_t out;
+         if (!blit_surface_init_alts(&out, cached->alts, cached->start_id))
+            throw std::logic_error("Cached sprite has no usable faces.");
+         return out;
+      }
 
 
       {
@@ -95,12 +104,12 @@ namespace Blit
             const char *frame = face.attribute("frame").value();
             std::basic_string<char> path   = Utils::join(basedir, "/", face.attribute("source").value());
 
-            Surface::Data *ptr;
+            blit_surface_data_t *ptr;
             if (*frame)
                ptr = load_apng_frame(path, face.attribute("frame").as_int());
             else
             {
-               ptr = (Surface::Data*)blit_str_map_find(cache, path.c_str());
+               ptr = (blit_surface_data_t*)blit_str_map_find(cache, path.c_str());
                if (!ptr)
                {
                   ptr = load_image(path);
@@ -118,16 +127,21 @@ namespace Blit
                || !blit_str_map_set(sprites, path.c_str(), def, NULL, NULL))
             throw std::bad_alloc();
 
-         return Surface(def->alts, def->start_id);
+         {
+            blit_surface_t out;
+            if (!blit_surface_init_alts(&out, def->alts, def->start_id))
+               throw std::logic_error("Sprite has no usable faces.");
+            return out;
+         }
       }
    }
 
-   Surface::Data *SurfaceCache::load_apng_frame(
+   blit_surface_data_t *SurfaceCache::load_apng_frame(
          const std::string& path, unsigned frame)
    {
       std::basic_string<char> key = Utils::join(path, "#", frame);
 
-      Surface::Data *ptr = (Surface::Data*)blit_str_map_find(cache,
+      blit_surface_data_t *ptr = (blit_surface_data_t*)blit_str_map_find(cache,
             key.c_str());
       if (ptr)
          return ptr;
@@ -166,14 +180,14 @@ namespace Blit
       }
       free(frames);
 
-      ptr = (Surface::Data*)blit_str_map_find(cache, key.c_str());
+      ptr = (blit_surface_data_t*)blit_str_map_find(cache, key.c_str());
       if (!ptr)
          throw std::runtime_error(Utils::join("APNG frame out of range: ",
                   path, "#", frame));
       return ptr;
    }
 
-   Surface::Data *SurfaceCache::load_image(const std::string& path)
+   blit_surface_data_t *SurfaceCache::load_image(const std::string& path)
    {
       uint32_t *image = NULL;
       unsigned width  = 0;
