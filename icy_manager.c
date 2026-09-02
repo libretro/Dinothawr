@@ -20,6 +20,7 @@
 #include "icy_menu_select.h"
 #include "icy_menu_slide.h"
 #include "icy_path.h"
+#include "icy_rate.h"
 #include "icy_save.h"
 
 /* Where the previews sit in the level-select grid. */
@@ -215,6 +216,9 @@ static int menu_cleared_cb(void *ctx, unsigned chapter)
 
 static int manager_load(icy_manager_t *m, const char *path_game)
    {
+      char   err[256];
+      char font_path[512];
+      rxml_node_t *game_node;
       rxml_document_t *doc;
       rxml_node_t     *node;
       icy_edge_init(&m->edges);
@@ -232,13 +236,11 @@ static int manager_load(icy_manager_t *m, const char *path_game)
 
       /* pugixml's document was itself a node, so every lookup below
        * re-descended into <m->game>.  Take the element once. */
-      rxml_node_t *game_node = blit_xml_root(doc, "game");
+      game_node = blit_xml_root(doc, "game");
 
-      char font_path[512];
 
       icy_path_join(font_path, sizeof(font_path), m->dir,
             blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
-      char   err[256];
 
       if (!m->m_failed && !(m->font = blit_font_cluster_new()))
          manager_fail(m, "Out of memory.");
@@ -341,6 +343,9 @@ static void manager_init_menu_surfaces(icy_manager_t *m)
 
 static void manager_init_menu_sprite(icy_manager_t *m, rxml_node_t *game_node)
    {
+      int complete_y;
+      int complete_x;
+      int arrow_x;
       {
          blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
          blit_surface_assign(&m->level_complete, &tmp);
@@ -353,11 +358,11 @@ static void manager_init_menu_sprite(icy_manager_t *m, rxml_node_t *game_node)
          blit_surface_release(&tmp);
       }
       m->lock_sprite.ignore_camera = 1;
-      int arrow_x = (ICY_GAME_FB_WIDTH - m->lock_sprite.rect.w) / 2;
+      arrow_x = (ICY_GAME_FB_WIDTH - m->lock_sprite.rect.w) / 2;
       m->lock_sprite.rect.pos = blit_pos( arrow_x, 160 );
 
-      int complete_x = PREVIEW_BASE_X + ICY_GAME_FB_WIDTH / 2 - m->level_complete.rect.w - 2;
-      int complete_y = PREVIEW_BASE_Y + ICY_GAME_FB_HEIGHT / 2 - m->level_complete.rect.h - 2;
+      complete_x = PREVIEW_BASE_X + ICY_GAME_FB_WIDTH / 2 - m->level_complete.rect.w - 2;
+      complete_y = PREVIEW_BASE_Y + ICY_GAME_FB_HEIGHT / 2 - m->level_complete.rect.h - 2;
       m->level_complete.rect.pos = blit_pos( complete_x, complete_y );
       m->level_complete.ignore_camera = 1;
 
@@ -458,8 +463,9 @@ static void manager_load_chapter(icy_manager_t *m, rxml_node_t *chap, int chapte
       for (node = blit_xml_child(chap, "map"); node;
             node = blit_xml_next(node, "map"), i++)
       {
-         const char    *path    = asset(m->dir, blit_xml_attr(node, "source"));
+         const char    *path = asset(m->dir, blit_xml_attr(node, "source"));
          blit_surface_t preview;
+         icy_level_t   *level;
          char           err[256];
 
          if (!make_preview(path, &m->game_bg, &preview, err, sizeof(err)))
@@ -468,8 +474,8 @@ static void manager_load_chapter(icy_manager_t *m, rxml_node_t *chap, int chapte
             return;
          }
 
-         icy_level_t   *level   = icy_chapter_add_level(loaded,
-               path, blit_xml_attr(node, "name"), &preview);
+         level = icy_chapter_add_level(loaded, path,
+               blit_xml_attr(node, "name"), &preview);
 
          blit_surface_release(&preview);
 
@@ -559,12 +565,14 @@ static void manager_init_level(icy_manager_t *m, unsigned chapter, unsigned leve
 static int manager_find_next_unsolved_level(icy_manager_t *m,
       unsigned *current_chap, unsigned *current_level)
    {
+      unsigned level;
+      unsigned chap;
       if ((*current_chap) == m->chapters.count - 1
             && (*current_level) == m->chapters.chapters[m->chapters.count - 1].count - 1)
          return 0;
 
-      unsigned chap = (*current_chap);
-      unsigned level = (*current_level);
+      chap = (*current_chap);
+      level = (*current_level);
       while (chap < m->chapters.count)
       {
          if (!m->chapters.chapters[chap].levels[level].completed)
@@ -730,24 +738,30 @@ static void manager_start_slide(icy_manager_t *m, blit_pos_t dir, unsigned cnt)
 
 static void manager_step_menu(icy_manager_t *m)
    {
-      blit_render_target_blit(&m->ui_target, &m->level_select_bg, blit_rect_zero());
+      int pressed_menu_left;
+      int pressed_menu_right;
+      int pressed_menu_up;
+      int pressed_menu_down;
+      int pressed_menu_ok;
+      int pressed_menu;
 
+      blit_render_target_blit(&m->ui_target, &m->level_select_bg,
+            blit_rect_zero());
       manager_render_previews(m);
-
       manager_menu_render_ui(m);
 
       /* Edges, not levels: a held direction moves the cursor once. */
-      int pressed_menu_left  = icy_edge_pressed(&m->edges, ICY_EDGE_LEFT,
+      pressed_menu_left  = icy_edge_pressed(&m->edges, ICY_EDGE_LEFT,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_LEFT));
-      int pressed_menu_right = icy_edge_pressed(&m->edges, ICY_EDGE_RIGHT,
+      pressed_menu_right = icy_edge_pressed(&m->edges, ICY_EDGE_RIGHT,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_RIGHT));
-      int pressed_menu_up    = icy_edge_pressed(&m->edges, ICY_EDGE_UP,
+      pressed_menu_up    = icy_edge_pressed(&m->edges, ICY_EDGE_UP,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_UP));
-      int pressed_menu_down  = icy_edge_pressed(&m->edges, ICY_EDGE_DOWN,
+      pressed_menu_down  = icy_edge_pressed(&m->edges, ICY_EDGE_DOWN,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_DOWN));
-      int pressed_menu_ok    = icy_edge_pressed(&m->edges, ICY_EDGE_OK,
+      pressed_menu_ok    = icy_edge_pressed(&m->edges, ICY_EDGE_OK,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_PUSH));
-      int pressed_menu       = icy_edge_pressed(&m->edges, ICY_EDGE_MENU,
+      pressed_menu       = icy_edge_pressed(&m->edges, ICY_EDGE_MENU,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_MENU));
 
       /* Navigation is index arithmetic over the chapter list, so it
@@ -808,6 +822,8 @@ static void manager_step_menu(icy_manager_t *m)
 
 static void manager_step_game(icy_manager_t *m)
    {
+      int pressed_reset;
+      int pressed_menu;
       if (!m->game)
          return;
 
@@ -817,8 +833,8 @@ static void manager_step_game(icy_manager_t *m)
          return;
       }
 
-      int pressed_menu = m->m_input_cb(m->m_input_ctx, ICY_INPUT_MENU);
-      int pressed_reset = m->m_input_cb(m->m_input_ctx, ICY_INPUT_RESET);
+      pressed_menu = m->m_input_cb(m->m_input_ctx, ICY_INPUT_MENU);
+      pressed_reset = m->m_input_cb(m->m_input_ctx, ICY_INPUT_RESET);
 
       if (icy_edge_pressed(&m->edges, ICY_EDGE_RESET, pressed_reset))
          manager_reset_level(m);
@@ -827,6 +843,7 @@ static void manager_step_game(icy_manager_t *m)
 
       if (icy_game_won(m->game))
       {
+         int cleared_all;
          unsigned pushes = icy_game_pushes(m->game);
          int trigger_completion;
 
@@ -843,7 +860,7 @@ static void manager_step_game(icy_manager_t *m)
          icy_save_store(&m->save, &m->chapters);
 
          /* Go to ending screen on the event that all levels have been cleared. */
-         int cleared_all = trigger_completion;
+         cleared_all = trigger_completion;
          if (trigger_completion)
          {
             cleared_all = icy_level_list_cleared(&m->chapters)
@@ -869,11 +886,15 @@ static void manager_step_game(icy_manager_t *m)
 
 static void manager_step_end(icy_manager_t *m)
    {
-      blit_render_target_blit(&m->ui_target, &m->end_credit_bg, blit_rect_zero());
+      int trigger_ok;
+      int trigger_menu;
 
-      int trigger_ok   = icy_edge_pressed(&m->edges, ICY_EDGE_OK,
+      blit_render_target_blit(&m->ui_target, &m->end_credit_bg,
+            blit_rect_zero());
+
+      trigger_ok   = icy_edge_pressed(&m->edges, ICY_EDGE_OK,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_PUSH));
-      int trigger_menu = icy_edge_pressed(&m->edges, ICY_EDGE_MENU,
+      trigger_menu = icy_edge_pressed(&m->edges, ICY_EDGE_MENU,
             m->m_input_cb(m->m_input_ctx, ICY_INPUT_MENU));
 
       if (trigger_ok || trigger_menu)
@@ -905,6 +926,7 @@ static int manager_iterate(icy_manager_t *m)
 
 static int manager_done(icy_manager_t *m)
    {
+      (void)m;
       return 0;
    }
 
@@ -926,34 +948,29 @@ static unsigned manager_total_cleared_levels(icy_manager_t *m)
    static int make_preview(const char *path, const blit_surface_t *bg,
       blit_surface_t *out, char *error, size_t error_len)
    {
-      blit_surface_t preview;
+      const unsigned      scale_factor   = 2;
+      int                 preview_width  = ICY_GAME_FB_WIDTH / scale_factor;
+      int                 preview_height = ICY_GAME_FB_HEIGHT / scale_factor;
+      blit_surface_t      preview;
+      blit_pixel_t       *owned;
+      icy_game_t         *preview_game;
+      struct preview_ctx  ctx;
 
       blit_surface_init(&preview);
       *out = preview;
 
       /* No font: a preview draws the level once and never a HUD. */
-      char        err[256];
-      icy_game_t *preview_game = icy_game_new(path, 0, 0, 0, NULL,
-            error, error_len);
+      preview_game = icy_game_new(path, 0, 0, 0, NULL, error, error_len);
 
       if (!preview_game)
          return 0;
 
       icy_game_set_bg(preview_game, bg);
 
-      static const unsigned scale_factor = 2;
-      int preview_width  = ICY_GAME_FB_WIDTH / scale_factor;
-      int preview_height = ICY_GAME_FB_HEIGHT / scale_factor;
-
       /* The destination is the surface's own buffer, filled directly by
-       * the video callback - there is no reason for a vector and a copy
-       * out of it. */
-      blit_pixel_t *owned = (blit_pixel_t*)calloc(
+       * the video callback - no intermediate and no copy out of it. */
+      owned = (blit_pixel_t*)calloc(
             (size_t)preview_width * preview_height, sizeof(*owned));
-
-      /* The downscale needs the destination and its pitch, so it goes
-       * through the context pointer. */
-      struct preview_ctx ctx;
 
       ctx.data  = owned;
       ctx.width = preview_width;

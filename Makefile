@@ -386,7 +386,7 @@ CORE_DIR := .
 
 include Makefile.common
 
-OBJECTS  := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o) $(SOURCES_ASM:.S=.o)
+OBJECTS  := $(SOURCES_C:.c=.o) $(SOURCES_ASM:.S=.o)
 CXXFLAGS += -DHAVE_RPNG -DHAVE_RWAV -DHAVE_RVORBIS -D__STDC_FORMAT_MACROS -ffast-math $(fpic) -I. $(INCFLAGS)
 CFLAGS   += -DHAVE_RPNG -DHAVE_RWAV -DHAVE_RVORBIS -D__STDC_FORMAT_MACROS -ffast-math $(fpic) $(INCFLAGS)
 
@@ -434,11 +434,9 @@ else
 	endif
 endif
 else
-	LD = $(CXX)
+	# The core is C; linking with the C driver keeps libstdc++ out of it.
+	LD = $(CC)
 endif
-
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $(OBJOUT)$@ $<
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $(OBJOUT)$@ $<
@@ -447,7 +445,7 @@ ifeq ($(platform), theos_ios)
 COMMON_FLAGS := -DIOS $(COMMON_DEFINES) $(INCFLAGS) -I$(THEOS_INCLUDE_PATH) -Wno-error
 $(LIBRARY_NAME)_CFLAGS += $(CFLAGS)  $(COMMON_FLAGS)
 $(LIBRARY_NAME)_CPPFLAGS += $(CXXFLAGS) $(COMMON_FLAGS)
-${LIBRARY_NAME}_FILES = $(SOURCES_CXX) $(SOURCES_C)
+${LIBRARY_NAME}_FILES = $(SOURCES_C)
 ADDITIONAL_CCFLAGS = -std=c++11 -stdlib=libc++
 ADDITIONAL_LDFLAGS = -std=c++11 -stdlib=libc++
 include $(THEOS_MAKE_PATH)/library.mk

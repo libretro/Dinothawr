@@ -3,8 +3,6 @@ INCFLAGS := -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 
-SOURCES_CXX := 	$(CORE_DIR)/libretro.cpp \
-
 SOURCES_C :=
 
 SOURCES_C += $(CORE_DIR)/rpng_front.c
@@ -36,6 +34,7 @@ SOURCES_C += $(CORE_DIR)/icy_rate.c
 SOURCES_C += $(CORE_DIR)/icy_game.c
 SOURCES_C += $(CORE_DIR)/icy_levels.c
 SOURCES_C += $(CORE_DIR)/icy_manager.c
+SOURCES_C += $(CORE_DIR)/libretro.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c

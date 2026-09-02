@@ -1,34 +1,30 @@
-#include "libretro.h"
-#include <stdint.h>
-#include <string.h>
 #include <math.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <iostream>
-#include <cmath>
+#include <string.h>
 
-#include "icy_manager.h"
-#include "icy_game.h"
-#include "icy_rate.h"
-#include "icy_input.h"
-#include "icy_save.h"
-#include "blit_surface_cache.h"
-#include "audio/game_audio.h"
-#include "audio/mixer_f32.h"
-#include "audio/mixer_i16.h"
-#include "audio/mixer_f32.h"
-
+#include <compat/msvc.h>
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 
+#include "libretro.h"
 #include "libretro_core_options.h"
+
+#include "audio/game_audio.h"
+#include "audio/mixer_f32.h"
+#include "audio/mixer_i16.h"
+#include "blit_surface_cache.h"
+#include "icy_game.h"
+#include "icy_input.h"
+#include "icy_manager.h"
 #include "icy_path.h"
 #include "icy_rate.h"
-
-using namespace std;
+#include "icy_save.h"
 
 static icy_manager_t *game;
-static string game_path;
-static string game_path_dir;
+static char game_path[1024];
+static char game_path_dir[1024];
 
 static mixer_f32_t *mixer_f32 = NULL;
 /* Integer audio backend, created only when the frontend does not
@@ -58,14 +54,6 @@ static retro_input_state_t input_state_cb;
  * simulation is stepped at. See icy_rate.h. */
 static double   g_framerate = 60.0;
 
-namespace Icy
-{
-   mixer_f32_t* get_mixer_f32() { return mixer_f32; }
-   mixer_i16_t* get_mixer_i16() { return mixer_i16; }
-   bool audio_is_float() { return s_audio_float; }
-   const string& get_basedir() { return game_path_dir; }
-
-}
 
 #define AUDIO_SAMPLE_RATE 44100
 /* One audio block is emitted per emulated frame; its size (samples per
@@ -80,17 +68,15 @@ static bool     s_av_info_queried = false;
 
 static void check_system_specs(void)
 {
-   // TODO : Ballpark average
+   /* TODO: ballpark average. */
    unsigned level = 4;
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 }
 
 /* The C audio managers reach the mixers through these. */
-extern "C" {
-   int icy_audio_is_float(void) { return Icy::audio_is_float() ? 1 : 0; }
-   mixer_f32_t *icy_mixer_f32(void) { return Icy::get_mixer_f32(); }
-   mixer_i16_t *icy_mixer_i16(void) { return Icy::get_mixer_i16(); }
-}
+int icy_audio_is_float(void) { return s_audio_float; }
+mixer_f32_t *icy_mixer_f32(void) { return mixer_f32; }
+mixer_i16_t *icy_mixer_i16(void) { return mixer_i16; }
 
 void retro_init(void)
 {
@@ -114,8 +100,10 @@ unsigned retro_api_version(void)
    return RETRO_API_VERSION;
 }
 
-void retro_set_controller_port_device(unsigned, unsigned)
-{}
+void retro_set_controller_port_device(unsigned port, unsigned device)
+{
+   (void)port;
+   (void)device;}
 
 void retro_get_system_info(struct retro_system_info *info)
 {
@@ -131,9 +119,16 @@ void retro_get_system_info(struct retro_system_info *info)
 
 static void get_av_info(struct retro_system_av_info *info)
 {
-   unsigned width = ICY_GAME_FB_WIDTH, height = ICY_GAME_FB_HEIGHT;
-   info->timing   = { g_framerate, (double)AUDIO_SAMPLE_RATE };
-   info->geometry = { width, height, width, height };
+   unsigned width  = ICY_GAME_FB_WIDTH;
+   unsigned height = ICY_GAME_FB_HEIGHT;
+
+   info->timing.fps          = g_framerate;
+   info->timing.sample_rate  = (double)AUDIO_SAMPLE_RATE;
+   info->geometry.base_width   = width;
+   info->geometry.base_height  = height;
+   info->geometry.max_width    = width;
+   info->geometry.max_height   = height;
+   info->geometry.aspect_ratio = 0.0f;
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
@@ -214,26 +209,23 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 static void audio_callback(void)
 {
    unsigned n = audio_frames;
+   unsigned i;
 
    /* Float-native path: the mixer renders float, so when the frontend
     * accepts float we push it straight through - no float->int16 step. */
    if (audio_batch_float_cb)
    {
       mixer_f32_render(mixer_f32, audio_buffer_f, n);
-      for (unsigned i = 0; i < n; )
-      {
-         unsigned written = audio_batch_float_cb(audio_buffer_f + 2 * i, n - i);
-         i += written;
-      }
+
+      for (i = 0; i < n; )
+         i += audio_batch_float_cb(audio_buffer_f + 2 * i, n - i);
       return;
    }
 
    mixer_i16_render(mixer_i16, audio_buffer, n);
-   for (unsigned i = 0; i < n; )
-   {
-      unsigned written = audio_batch_cb(audio_buffer + 2 * i, n - i);
-      i += written;
-   }
+
+   for (i = 0; i < n; )
+      i += audio_batch_cb(audio_buffer + 2 * i, n - i);
 }
 
 /* Resolve the configured frame rate. "Auto" follows the frontend's target
@@ -241,8 +233,12 @@ static void audio_callback(void)
  * the audio buffers are sized for. */
 static double resolve_framerate(void)
 {
-   retro_variable var = { "dino_framerate" };
-   double fps = 60.0;
+   double fps;
+   struct retro_variable var;
+
+   var.key   = "dino_framerate";
+   var.value = NULL;
+   fps = 60.0;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
@@ -326,15 +322,11 @@ void retro_run(void)
     * does not exist, goal squares and blocks that do not match - so a
     * bad level would take the frontend down mid-play. Report and ask to
     * be unloaded instead, which loses the session and nothing else. */
-   try
-   {
-      if (!icy_manager_iterate(game))
-         throw runtime_error(icy_manager_error(game));
-   }
-   catch (const std::exception& e)
+   if (!icy_manager_iterate(game))
    {
       if (log_cb)
-         log_cb(RETRO_LOG_ERROR, "Dinothawr: %s\n", e.what());
+         log_cb(RETRO_LOG_ERROR, "Dinothawr: %s\n",
+               icy_manager_error(game));
 
       show_message("Dinothawr: level data is broken, stopping");
       environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
@@ -351,9 +343,10 @@ void retro_run(void)
 /* Free functions rather than lambdas: both only ever read the frontend
  * callbacks, which are file-scope, so the captures were empty and the
  * std::function they were stored in outlived the scope that made them. */
-static int poll_input(void*, enum icy_input input)
+static int poll_input(void *ctx, enum icy_input input)
 {
    unsigned btn;
+   (void)ctx;
 
    switch (input)
    {
@@ -370,24 +363,21 @@ static int poll_input(void*, enum icy_input input)
    return input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, btn) != 0;
 }
 
-static void refresh_video(void*, const void *data, unsigned width,
+static void refresh_video(void *ctx, const void *data, unsigned width,
       unsigned height, size_t pitch)
 {
+   (void)ctx;
    video_cb(data, width, height, pitch);
 }
 
-static void load_game(const string& path)
+/* Non-zero on success; @error, if given, receives the reason. */
+static int load_game(const char *path, char *error, size_t error_len)
 {
-   {
-      char err[256];
+   icy_manager_free(game);
+   game = icy_manager_new(path, poll_input, NULL, refresh_video, NULL,
+         error, error_len);
 
-      icy_manager_free(game);
-      game = icy_manager_new(path.c_str(), poll_input, NULL, refresh_video,
-            NULL, err, sizeof(err));
-
-      if (!game)
-         throw runtime_error(err);
-   }
+   return game != NULL;
 }
 
 /* Reload, keeping the save: the manager is rebuilt from the .game, so
@@ -404,15 +394,15 @@ void retro_reset(void)
    if (data)
       memcpy(saved.data, data, size);
 
-   try
    {
-      load_game(game_path);
-   }
-   catch (const std::exception& e)
-   {
-      if (log_cb)
-         log_cb(RETRO_LOG_ERROR, "Dinothawr: reset failed: %s\n", e.what());
-      return;
+      char err[256];
+
+      if (!load_game(game_path, err, sizeof(err)))
+      {
+         if (log_cb)
+            log_cb(RETRO_LOG_ERROR, "Dinothawr: reset failed: %s\n", err);
+         return;
+      }
    }
 
    if ((data = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM)))
@@ -430,33 +420,52 @@ static void show_message(const char *text)
 
    if (msg_interface_version >= 1)
    {
-      struct retro_message_ext msg = {
-         text, 3000, 3, RETRO_LOG_ERROR,
-         RETRO_MESSAGE_TARGET_ALL, RETRO_MESSAGE_TYPE_NOTIFICATION, -1
-      };
+      struct retro_message_ext msg;
+
+      msg.msg      = text;
+      msg.duration = 3000;
+      msg.priority = 3;
+      msg.level    = RETRO_LOG_ERROR;
+      msg.target   = RETRO_MESSAGE_TARGET_ALL;
+      msg.type     = RETRO_MESSAGE_TYPE_NOTIFICATION;
+      msg.progress = -1;
+
       environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
    }
    else
    {
-      struct retro_message msg = { text, 180 };
+      struct retro_message msg;
+
+      msg.msg    = text;
+      msg.frames = 180;
+
       environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
    }
 }
 
 bool retro_load_game(const struct retro_game_info* info)
 {
+   enum retro_pixel_format fmt;
+   struct retro_input_descriptor desc[] = {
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "Push" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "Menu" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Reset" },
+
+      { 0 },
+   };
+
    /* The core sets SET_SUPPORT_NO_GAME, and a frontend starting it with
     * no content may hand over either a NULL info or a zeroed one - the
     * second of which used to reach std::string(NULL) and segfault.
     * Both mean the same thing: fall through to the system directory. */
    if (info && info->path)
    {
-      game_path     = info->path;
-      {
-         char dir[512];
-         icy_path_dir(dir, sizeof(dir), game_path.c_str());
-         game_path_dir = dir;
-      }
+      snprintf(game_path, sizeof(game_path), "%s", info->path);
+      icy_path_dir(game_path_dir, sizeof(game_path_dir), game_path);
    }
    else
    {
@@ -467,21 +476,16 @@ bool retro_load_game(const struct retro_game_info* info)
       if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) &&
           system_dir)
       {
-         {
-            char dir[512];
-            char file[512];
-
-            icy_path_join(dir, sizeof(dir), system_dir, "dinothawr");
-            icy_path_join(file, sizeof(file), dir, "dinothawr.game");
-            game_path_dir = dir;
-            game_path     = file;
-         }
+         icy_path_join(game_path_dir, sizeof(game_path_dir), system_dir,
+               "dinothawr");
+         icy_path_join(game_path, sizeof(game_path), game_path_dir,
+               "dinothawr.game");
 
          /* path_is_valid stats through the frontend's VFS, so a system
           * directory the frontend can reach but stdio cannot still
           * resolves - and opening the file only to close it again was
           * never what this wanted to ask. */
-         game_file_exists = path_is_valid(game_path.c_str());
+         game_file_exists = path_is_valid(game_path);
       }
 
       if (!game_file_exists)
@@ -550,18 +554,6 @@ bool retro_load_game(const struct retro_game_info* info)
          mixer_i16 = mixer_i16_new();
    }
 
-   struct retro_input_descriptor desc[] = {
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "Push" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "Menu" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Reset" },
-
-      { 0 },
-   };
-
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
    /* Every failure below the frontend boundary is an exception, and
@@ -569,20 +561,17 @@ bool retro_load_game(const struct retro_game_info* info)
     * retro_load_game terminates the frontend rather than failing the
     * load, so this is where they stop: report and return false, which
     * is what a core is supposed to do with content it cannot read. */
-   try
    {
-      load_game(game_path);
-   }
-   catch (const std::exception& e)
-   {
-      if (log_cb)
-         log_cb(RETRO_LOG_ERROR, "Dinothawr: failed to load: %s\n",
-               e.what());
+      char err[256];
 
-      show_message("Dinothawr: failed to load game files");
-      icy_manager_free(game);
-      game = NULL;
-      return false;
+      if (!load_game(game_path, err, sizeof(err)))
+      {
+         if (log_cb)
+            log_cb(RETRO_LOG_ERROR, "Dinothawr: failed to load: %s\n", err);
+
+         show_message("Dinothawr: failed to load game files");
+         return false;
+      }
    }
 
    /* Audio is now produced synchronously from retro_run (no async audio
@@ -591,15 +580,19 @@ bool retro_load_game(const struct retro_game_info* info)
    mixer_f32_set_enabled(mixer_f32, true); /* both are NULL-safe: only */
    mixer_i16_set_enabled(mixer_i16, true); /* the live one is non-NULL */
 
-   retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+   fmt = RETRO_PIXEL_FORMAT_XRGB8888;
    environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
 
    update_variables();
    return true;
 }
 
-bool retro_load_game_special(unsigned, const struct retro_game_info*, size_t)
+bool retro_load_game_special(unsigned type,
+      const struct retro_game_info *info, size_t num)
 {
+   (void)type;
+   (void)info;
+   (void)num;
    return false;
 }
 
@@ -635,13 +628,17 @@ size_t retro_serialize_size(void)
    return 0;
 }
 
-bool retro_serialize(void*, size_t)
+bool retro_serialize(void *data, size_t size)
 {
+   (void)data;
+   (void)size;
    return false;
 }
 
-bool retro_unserialize(const void*, size_t)
+bool retro_unserialize(const void *data, size_t size)
 {
+   (void)data;
+   (void)size;
    return false;
 }
 
@@ -664,6 +661,9 @@ size_t retro_get_memory_size(unsigned id)
 void retro_cheat_reset(void)
 {}
 
-void retro_cheat_set(unsigned, bool, const char*)
-{}
+void retro_cheat_set(unsigned index, bool enabled, const char *code)
+{
+   (void)index;
+   (void)enabled;
+   (void)code;}
 
