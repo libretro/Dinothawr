@@ -32,15 +32,21 @@ namespace Icy
       return out;
    }
 
-   static blit_surface_t cache_image_or_throw(const char *path)
+   /* An empty surface on failure, with the reason left in the cache for
+    * the caller to record. */
+   static blit_surface_t cache_image(const char *path)
    {
       blit_surface_t out;
 
       if (!blit_surface_cache_image(blit_surface_cache(), path, &out))
-         throw std::runtime_error(
-               blit_surface_cache_error(blit_surface_cache()));
+         blit_surface_init(&out);
 
       return out;
+   }
+
+   static const char *cache_why(void)
+   {
+      return blit_surface_cache_error(blit_surface_cache());
    }
 
    /* Owns a parsed document for the length of a scope. One user, so it
@@ -113,7 +119,7 @@ namespace Icy
          char msg[512];
          snprintf(msg, sizeof(msg), "Failed to load game: %s.",
                path_game);
-         throw runtime_error(msg);
+         fail(msg);
       }
 
       /* pugixml's document was itself a node, so every lookup below
@@ -126,42 +132,49 @@ namespace Icy
             blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
       char   err[256];
 
-      if (!(font = blit_font_cluster_new()))
-         throw std::bad_alloc();
+      if (!m_failed && !(font = blit_font_cluster_new()))
+         fail("Out of memory.");
 
-      if (!blit_font_cluster_add(font, "yellow", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00),
-               err, sizeof(err)))
-         throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "yellow", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00),
-               err, sizeof(err)))
-         throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "white", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b),
-               err, sizeof(err)))
-         throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "white", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff),
-               err, sizeof(err)))
-         throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "lime", font_path, blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94),
-               err, sizeof(err)))
-         throw runtime_error(err);
-      if (!blit_font_cluster_add(font, "lime", font_path, blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0),
-               err, sizeof(err)))
-         throw runtime_error(err);
+      if (!m_failed && !blit_font_cluster_add(font, "yellow", font_path,
+               blit_pos(-1, 1), blit_pixel_argb(0xff, 0xc0, 0x98, 0x00), err, sizeof(err)))
+         fail(err);
+      if (!m_failed && !blit_font_cluster_add(font, "yellow", font_path,
+               blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xde, 0x00), err, sizeof(err)))
+         fail(err);
+      if (!m_failed && !blit_font_cluster_add(font, "white", font_path,
+               blit_pos(-1, 1), blit_pixel_argb(0xff, 0x73, 0x73, 0x8b), err, sizeof(err)))
+         fail(err);
+      if (!m_failed && !blit_font_cluster_add(font, "white", font_path,
+               blit_pos( 0, 0), blit_pixel_argb(0xff, 0xff, 0xff, 0xff), err, sizeof(err)))
+         fail(err);
+      if (!m_failed && !blit_font_cluster_add(font, "lime", font_path,
+               blit_pos(-1, 1), blit_pixel_argb(0xff, 0x39, 0x5a, 0x94), err, sizeof(err)))
+         fail(err);
+      if (!m_failed && !blit_font_cluster_add(font, "lime", font_path,
+               blit_pos( 0, 0), blit_pixel_argb(0xff, 0xb8, 0xe8, 0xb0), err, sizeof(err)))
+         fail(err);
 
-      init_menu(blit_xml_attr(blit_xml_child(game_node, "title"), "source"));
-      init_menu_sprite(game_node);
-      init_sfx(game_node);
-      init_bg(game_node);
-
-      for (rxml_node_t *node = blit_xml_child(game_node, "chapter"); node; node = blit_xml_next(node, "chapter"))
+      if (!m_failed)
       {
-         load_chapter(node, (int)chapters.count);
+         init_menu(blit_xml_attr(blit_xml_child(game_node, "title"),
+                  "source"));
+         init_menu_sprite(game_node);
+         init_sfx(game_node);
+         init_bg(game_node);
       }
 
+      for (rxml_node_t *node = blit_xml_child(game_node, "chapter");
+            node && !m_failed; node = blit_xml_next(node, "chapter"))
+         load_chapter(node, (int)chapters.count);
+
       blit_render_target_release(&ui_target);
-      if (!blit_render_target_init_size(&ui_target, ICY_GAME_FB_WIDTH,
-               ICY_GAME_FB_HEIGHT))
-         throw std::bad_alloc();
+      if (!m_failed && !blit_render_target_init_size(&ui_target,
+               ICY_GAME_FB_WIDTH, ICY_GAME_FB_HEIGHT))
+         fail("Out of memory.");
+
+      /* One place a broken install surfaces, for the frontend. */
+      if (m_failed)
+         throw runtime_error(m_error);
       }
       catch (...)
       {
@@ -172,6 +185,15 @@ namespace Icy
 
    /* What the destructor releases, so a failed construction can release
     * it too. */
+   void GameManager::fail(const char *what)
+   {
+      if (m_failed)
+         return;
+
+      m_failed = 1;
+      snprintf(m_error, sizeof(m_error), "%s", what);
+   }
+
    void GameManager::release_owned()
    {
       icy_level_list_release(&chapters);
@@ -204,6 +226,8 @@ namespace Icy
       /* Plain C members in a C++ class: nothing initialises them. */
       icy_level_list_init(&chapters);
       icy_save_clear(&save);
+      m_failed   = 0;
+      m_error[0] = '\0';
       dir[0] = '\0';
       font = NULL;
       blit_render_target_init(&target);
@@ -223,13 +247,13 @@ namespace Icy
    void GameManager::init_menu_sprite(rxml_node_t *game_node)
    {
       {
-         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
+         blit_surface_t tmp = cache_image(asset(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
          blit_surface_assign(&level_complete, &tmp);
          blit_surface_release(&tmp);
       }
 
       {
-         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
+         blit_surface_t tmp = cache_image(asset(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
          blit_surface_assign(&lock_sprite, &tmp);
          blit_surface_release(&tmp);
       }
@@ -243,21 +267,21 @@ namespace Icy
       level_complete.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
+         blit_surface_t tmp = cache_image(asset(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
          blit_surface_assign(&level_select_bg, &tmp);
          blit_surface_release(&tmp);
       }
       level_select_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
+         blit_surface_t tmp = cache_image(asset(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
          blit_surface_assign(&end_credit_bg, &tmp);
          blit_surface_release(&tmp);
       }
       end_credit_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image_or_throw(asset(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
+         blit_surface_t tmp = cache_image(asset(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
          blit_surface_assign(&game_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -296,7 +320,7 @@ namespace Icy
 
       if (!icy_bgm_set_tracks(icy_bgm(), count ? path_ptrs : NULL,
                count ? gains : NULL, count))
-         throw std::bad_alloc();
+         fail("Out of memory loading music.");
    }
 
    void GameManager::init_sfx(rxml_node_t *game_node)
@@ -312,12 +336,13 @@ namespace Icy
             char msg[512];
             snprintf(msg, sizeof(msg), "Failed to load sound: %s",
                   blit_xml_attr(node, "source"));
-            throw runtime_error(msg);
+            fail(msg);
+            return;
          }
    }
 
-   static blit_surface_t make_preview(const char *path,
-         const blit_surface_t& bg);
+   static int make_preview(const char *path, const blit_surface_t& bg,
+         blit_surface_t *out, char *error, size_t error_len);
 
    void GameManager::load_chapter(rxml_node_t *chap, int chapter)
    {
@@ -327,20 +352,34 @@ namespace Icy
       int            i = 0;
 
       if (!loaded)
-         throw std::bad_alloc();
+      {
+         fail("Out of memory loading chapter.");
+         return;
+      }
 
       for (node = blit_xml_child(chap, "map"); node;
             node = blit_xml_next(node, "map"), i++)
       {
          const char    *path    = asset(dir, blit_xml_attr(node, "source"));
-         blit_surface_t preview = make_preview(path, game_bg);
+         blit_surface_t preview;
+         char           err[256];
+
+         if (!make_preview(path, game_bg, &preview, err, sizeof(err)))
+         {
+            fail(err);
+            return;
+         }
+
          icy_level_t   *level   = icy_chapter_add_level(loaded,
                path, blit_xml_attr(node, "name"), &preview);
 
          blit_surface_release(&preview);
 
          if (!level)
-            throw std::bad_alloc();
+         {
+            fail("Out of memory loading level.");
+            return;
+         }
 
          level->position = blit_pos(preview_base_x + i * preview_delta_x,
                preview_base_y + preview_delta_y * chapter);
@@ -358,12 +397,15 @@ namespace Icy
 
    void GameManager::init_menu(const char *level)
    {
-      blit_surface_t surf = cache_image_or_throw(asset(dir, level));
+      blit_surface_t surf = cache_image(asset(dir, level));
 
       blit_render_target_release(&target);
       if (!blit_render_target_init_size(&target, ICY_GAME_FB_WIDTH,
                ICY_GAME_FB_HEIGHT))
-         throw std::bad_alloc();
+      {
+         fail("Out of memory.");
+         return;
+      }
       blit_render_target_blit(&target, &surf, blit_rect_zero());
       blit_surface_release(&surf);
 
@@ -389,7 +431,10 @@ namespace Icy
                   font, err, sizeof(err)));
 
          if (!game)
-            throw runtime_error(err);
+         {
+            fail(err);
+            return;
+         }
       }
       icy_game_set_input_cb(game.get(), m_input_cb, m_input_ctx);
       icy_game_set_video_cb(game.get(), m_video_cb, m_video_ctx);
@@ -651,7 +696,10 @@ namespace Icy
          return;
 
       if (!icy_game_iterate(game.get()))
-         throw runtime_error(icy_game_error(game.get()));
+      {
+         fail(icy_game_error(game.get()));
+         return;
+      }
 
       bool pressed_menu = m_input_cb(m_input_ctx, ICY_INPUT_MENU);
       bool pressed_reset = m_input_cb(m_input_ctx, ICY_INPUT_RESET);
@@ -718,13 +766,17 @@ namespace Icy
    {
       switch (m_game_state)
       {
-         case State::Title: return step_title();
-         case State::Menu: return step_menu();
-         case State::MenuSlide: return step_menu_slide();
-         case State::Game: return step_game();
-         case State::End: return step_end();
-         default: throw logic_error("Game state is invalid.");
+         case State::Title: step_title(); break;
+         case State::Menu: step_menu(); break;
+         case State::MenuSlide: step_menu_slide(); break;
+         case State::Game: step_game(); break;
+         case State::End: step_end(); break;
+         default: fail("Game state is invalid."); break;
       }
+
+      /* One place a failure during play surfaces, for the frontend. */
+      if (m_failed)
+         throw runtime_error(m_error);
    }
 
    bool GameManager::done() const
@@ -744,20 +796,21 @@ namespace Icy
 
    /* Renders one frame of a level at half size, which is what the menu
     * shows for it. */
-   static blit_surface_t make_preview(const char *path,
-         const blit_surface_t& bg)
+   static int make_preview(const char *path, const blit_surface_t& bg,
+         blit_surface_t *out, char *error, size_t error_len)
    {
       blit_surface_t preview;
 
       blit_surface_init(&preview);
+      *out = preview;
 
       /* No font: a preview draws the level once and never a HUD. */
       char        err[256];
       icy_game_t *preview_game = icy_game_new(path, 0, 0, 0, NULL,
-            err, sizeof(err));
+            error, error_len);
 
       if (!preview_game)
-         throw runtime_error(err);
+         return 0;
 
       icy_game_set_bg(preview_game, &bg);
 
@@ -777,7 +830,11 @@ namespace Icy
       preview_ctx ctx = { owned, preview_width };
 
       if (!owned)
-         throw std::bad_alloc();
+      {
+         icy_game_free(preview_game);
+         snprintf(error, error_len, "Out of memory building preview.");
+         return 0;
+      }
 
       icy_game_set_input_cb(preview_game,
             [](void*, enum icy_input) { return 0; }, NULL);
@@ -807,12 +864,10 @@ namespace Icy
 
       if (!icy_game_iterate(preview_game))
       {
-         char why[256];
-
-         snprintf(why, sizeof(why), "%s", icy_game_error(preview_game));
+         snprintf(error, error_len, "%s", icy_game_error(preview_game));
          icy_game_free(preview_game);
          free(owned);
-         throw runtime_error(why);
+         return 0;
       }
 
       icy_game_free(preview_game);
@@ -825,13 +880,16 @@ namespace Icy
          if (!pdata)
          {
             free(owned);
-            throw std::bad_alloc();
+            snprintf(error, error_len, "Out of memory building preview.");
+            return 0;
          }
 
          blit_surface_init_data(&preview, pdata);
          blit_surface_data_unref(pdata);
       }
-      return preview;
+
+      *out = preview;
+      return 1;
    }
 
 }

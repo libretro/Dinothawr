@@ -120,6 +120,14 @@ namespace Icy
          icy_level_list_t chapters;
          icy_save_t       save;
 
+         /* Load failures are recorded rather than thrown from where they
+          * are noticed - the loaders are what a C form of this class
+          * would return failure from, and a flag is what that looks
+          * like. The constructor raises it once, for the frontend. */
+         int  m_failed;
+         char m_error[256];
+         void fail(const char *what);
+
          /* The level in play, or nothing while in the menu. */
          struct GameDeleter
          { void operator()(icy_game_t *g) const { icy_game_free(g); } };
