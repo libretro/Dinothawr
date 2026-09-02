@@ -9,6 +9,21 @@ using namespace std;
 
 namespace Icy
 {
+   /* Loads in the initialiser list, because CameraManager is constructed
+    * there and needs the map's size. Loading in the body instead handed
+    * it a NULL map and a zero-sized world. */
+   static blit_tilemap_t *load_map(const std::string& path)
+   {
+      char            err[256];
+      blit_tilemap_t *map = blit_tilemap_load(path.c_str(), err,
+            sizeof(err));
+
+      if (!map)
+         throw std::runtime_error(err);
+
+      return map;
+   }
+
    EdgeDetector::EdgeDetector(bool init) : pos(init)
    {}
 
@@ -20,9 +35,9 @@ namespace Icy
    }
 
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
-      : map(level_path),
+      : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(font),
-         camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
+         camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
@@ -38,9 +53,9 @@ namespace Icy
    }
 
    Game::Game(const string& level_path)
-      : map(level_path),
+      : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(NULL),
-         camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
+         camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), push(true)
    {
@@ -54,6 +69,7 @@ namespace Icy
 
    Game::~Game()
    {
+      blit_tilemap_free(map);
       blit_render_target_release(&target);
       blit_surface_release(&player);
    }
@@ -77,11 +93,11 @@ namespace Icy
 
    void Game::set_initial_pos(const string& level)
    {
-      Blit::Tilemap::Layer *layer = map.find_layer("floor");
+      blit_layer_t *layer = blit_tilemap_find_layer(map, "floor");
       if (!layer)
          throw runtime_error("Floor layer not found.");
 
-      std::basic_string<char> sprite_path = Utils::find_or_default(layer->attr, "player_sprite", "");
+      std::basic_string<char> sprite_path = attr_or(layer->attr, "player_sprite", "");
       {
          /* The cache hands back a wrapper; take the raw surface out of
           * it and keep our own reference. */
@@ -95,13 +111,13 @@ namespace Icy
          player = sprite;
       }
 
-      int x     = Utils::stoi(Utils::find_or_default(layer->attr, "start_x", "1"));
-      int y     = Utils::stoi(Utils::find_or_default(layer->attr, "start_y", "1"));
-      int off_x = Utils::stoi(Utils::find_or_default(layer->attr, "player_offset_x", "0"));
-      int off_y = Utils::stoi(Utils::find_or_default(layer->attr, "player_offset_y", "0"));
-      std::basic_string<char> face = Utils::find_or_default(layer->attr, "start_facing", "right");
+      int x     = Utils::stoi(attr_or(layer->attr, "start_x", "1"));
+      int y     = Utils::stoi(attr_or(layer->attr, "start_y", "1"));
+      int off_x = Utils::stoi(attr_or(layer->attr, "player_offset_x", "0"));
+      int off_y = Utils::stoi(attr_or(layer->attr, "player_offset_y", "0"));
+      std::basic_string<char> face = attr_or(layer->attr, "start_facing", "right");
 
-      player.rect.pos = blit_pos(x * map.tile_width(), y * map.tile_height());
+      player.rect.pos = blit_pos(x * blit_tilemap_tile_width(map), y * blit_tilemap_tile_height(map));
       player_off = blit_pos(off_x, off_y);
       facing = string_to_input(face);
       set_player_alt(face);
@@ -118,7 +134,7 @@ namespace Icy
 
       camera.update();
 
-      map.render(target);
+      blit_tilemap_render(map, &target);
       blit_render_target_blit_offset(&target, &player, blit_rect_zero(), player_off);
 
       if (font)
@@ -141,21 +157,21 @@ namespace Icy
    /* A plain scan rather than copy_if over a reference_wrapper vector:
     * the elements are about to stop living in a std::vector, and this
     * form does not care what holds them. */
-   vector<SurfaceCluster::Elem*> Game::get_tiles_with_attr(const string& name,
+   vector<blit_cluster_elem_t*> Game::get_tiles_with_attr(const string& name,
          const string& attr, const string& val)
    {
-      vector<SurfaceCluster::Elem*> surfs;
-      Blit::Tilemap::Layer *layer = map.find_layer(name);
+      vector<blit_cluster_elem_t*> surfs;
+      blit_layer_t *layer = blit_tilemap_find_layer(map, name.c_str());
       if (!layer)
          return surfs;
 
       {
-         Blit::SurfaceCluster& cluster = layer->cluster;
+         blit_surface_cluster_t& cluster = layer->cluster;
          size_t i;
 
-         for (i = 0; i < cluster.size(); i++)
+         for (i = 0; i < cluster.count; i++)
          {
-            SurfaceCluster::Elem *elem = cluster.at(i);
+            blit_cluster_elem_t *elem = &cluster.elems[i];
             const char *found = blit_attr_table_find(elem->surf.attribs,
                   attr.c_str());
 
@@ -171,7 +187,7 @@ namespace Icy
    {
       won_frame_cnt++;
 
-      std::vector<Blit::SurfaceCluster::Elem*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      std::vector<blit_cluster_elem_t*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
 
       const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
 
@@ -221,14 +237,14 @@ namespace Icy
          || (won_frame_cnt >= frames_to_ticks(won_frame_cnt_limit));
    }
 
-   static bool is_game_won(const Blit::SurfaceCluster::Elem *a,
-         const Blit::SurfaceCluster::Elem *b)
+   static bool is_game_won(const blit_cluster_elem_t *a,
+         const blit_cluster_elem_t *b)
    {
       return blit_pos_equal(a->surf.rect.pos, b->surf.rect.pos) != 0;
    }
 
-   static bool sort_blocks(const SurfaceCluster::Elem *a,
-         const SurfaceCluster::Elem *b)
+   static bool sort_blocks(const blit_cluster_elem_t *a,
+         const blit_cluster_elem_t *b)
    {
       return blit_pos_less(a->surf.rect.pos, b->surf.rect.pos) != 0;
    }
@@ -236,8 +252,8 @@ namespace Icy
    // Checks if all goals on floor and blocks are aligned with each other.
    bool Game::won_condition()
    {
-      std::vector<Blit::SurfaceCluster::Elem*> goal_floor  = get_tiles_with_attr("floor", "goal", "true");
-      std::vector<Blit::SurfaceCluster::Elem*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      std::vector<blit_cluster_elem_t*> goal_floor  = get_tiles_with_attr("floor", "goal", "true");
+      std::vector<blit_cluster_elem_t*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
 
       if (goal_floor.size() != goal_blocks.size())
          throw logic_error("Number of goal floors and goal blocks do not match.");
@@ -363,25 +379,25 @@ namespace Icy
       // Always assume that the rect in question is inside a single tile.
       // This is needed as the dino sprite can be slightly larger than 16x16, but it's
       // *assumed* from a collition detection POV that a surface is tile sized to simplify things.
-      new_rect.w = map.tile_width();
-      new_rect.h = map.tile_height();
+      new_rect.w = blit_tilemap_tile_width(map);
+      new_rect.h = blit_tilemap_tile_height(map);
 
-      bool outside_grid = surf.rect.pos.x % map.tile_width() || surf.rect.pos.y % map.tile_height();
+      bool outside_grid = surf.rect.pos.x % blit_tilemap_tile_width(map) || surf.rect.pos.y % blit_tilemap_tile_height(map);
       if (outside_grid)
          throw logic_error("Offset collision check was performed outside tile grid.");
 
-      int current_x = surf.rect.pos.x / map.tile_width();
-      int current_y = surf.rect.pos.y / map.tile_height();
+      int current_x = surf.rect.pos.x / blit_tilemap_tile_width(map);
+      int current_y = surf.rect.pos.y / blit_tilemap_tile_height(map);
 
-      int min_tile_x = new_rect.pos.x / map.tile_width();
-      int max_tile_x = (new_rect.pos.x + new_rect.w - 1) / map.tile_width();
+      int min_tile_x = new_rect.pos.x / blit_tilemap_tile_width(map);
+      int max_tile_x = (new_rect.pos.x + new_rect.w - 1) / blit_tilemap_tile_width(map);
 
-      int min_tile_y = new_rect.pos.y / map.tile_height();
-      int max_tile_y = (new_rect.pos.y + new_rect.h - 1) / map.tile_height();
+      int min_tile_y = new_rect.pos.y / blit_tilemap_tile_height(map);
+      int max_tile_y = (new_rect.pos.y + new_rect.h - 1) / blit_tilemap_tile_height(map);
 
       for (int y = min_tile_y; y <= max_tile_y; y++)
          for (int x = min_tile_x; x <= max_tile_x; x++)
-            if (blit_pos(x, y) != blit_pos(current_x, current_y) && map.collision(blit_pos(x, y))) // Can't collide against ourselves.
+            if (blit_pos(x, y) != blit_pos(current_x, current_y) && blit_tilemap_collision(map, blit_pos(x, y))) // Can't collide against ourselves.
                return true;
 
       return false;
@@ -390,20 +406,20 @@ namespace Icy
    void Game::push_block()
    {
       Blit::Pos offset = input_to_offset(facing);
-      Blit::Pos dir    = offset * blit_pos(map.tile_width(), map.tile_height());
-      blit_surface_t *tile  = map.find_tile("blocks", player.rect.pos + dir);
+      Blit::Pos dir    = offset * blit_pos(blit_tilemap_tile_width(map), blit_tilemap_tile_height(map));
+      blit_surface_t *tile  = blit_tilemap_find_tile(map, "blocks", player.rect.pos + dir);
 
       if (!tile)
          return;
 
-      int tile_x = player.rect.pos.x / map.tile_width();
-      int tile_y = player.rect.pos.y / map.tile_height();
+      int tile_x = player.rect.pos.x / blit_tilemap_tile_width(map);
+      int tile_y = player.rect.pos.y / blit_tilemap_tile_height(map);
       Pos tile_pos = blit_pos(tile_x, tile_y);
 
-      if (!map.collision(tile_pos + (2 * offset)))
+      if (!blit_tilemap_collision(map, tile_pos + (2 * offset)))
       {
          stepper = bind(&Game::tile_stepper, this, ref(*tile), offset);
-         begin_leg(offset.x ? map.tile_width() : map.tile_height());
+         begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
          stepper_cnt = 0;
          player_walking = false;
          set_player_alt_index(0);
@@ -421,7 +437,7 @@ namespace Icy
       if (!is_offset_collision(player, offset))
       {
          stepper = bind(&Game::tile_stepper, this, ref(player), offset);
-         begin_leg(offset.x ? map.tile_width() : map.tile_height());
+         begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
          player_walking = true;
       }
    }
@@ -439,7 +455,7 @@ namespace Icy
 
    bool Game::tile_stepper(blit_surface_t& surf, Pos step_dir)
    {
-      int tile_size = step_dir.x ? map.tile_width() : map.tile_height();
+      int tile_size = step_dir.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map);
       int want;
 
       /* leg_ticks is fixed for the duration of a leg - begin_leg() is the
@@ -483,7 +499,7 @@ namespace Icy
       }
 
       //cerr << "Player: " << player.rect.pos << " Surf: " << surf->rect().pos << endl; 
-      blit_surface_t *surface = map.find_tile("floor", surf.rect.pos);
+      blit_surface_t *surface = blit_tilemap_find_tile(map, "floor", surf.rect.pos);
       const char *slip = surface ? blit_attr_table_find(surface->attribs,
             &surf == &player ? "slippery_player" : "slippery_block") : NULL;
       bool slippery = slip && std::strcmp(slip, "true") == 0;

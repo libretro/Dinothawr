@@ -2,7 +2,8 @@
 #define GAME_HPP__
 
 #include "surface_cluster.hpp"
-#include "tilemap.hpp"
+#include "blit_tilemap.h"
+#include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
 #include "audio/mixer_i16.h"
@@ -17,6 +18,14 @@
 
 namespace Icy
 {
+   /* An attribute or a default, for the loader's many optional keys. */
+   inline const char *attr_or(const blit_attr_table_t *table,
+         const char *key, const char *fallback)
+   {
+      const char *value = blit_attr_table_find(table, key);
+      return value ? value : fallback;
+   }
+
    /* The two audio backends. Exactly one is live for a given game:
     * audio_is_float() says which, and the other accessor returns NULL.
     * They are the same mixer in two sample types, so the managers drive
@@ -169,8 +178,8 @@ namespace Icy
          void input_cb(std::function<bool (Input)> cb) { m_input_cb = cb; }
          void video_cb(std::function<void (const void*, unsigned, unsigned, std::size_t)> cb) { m_video_cb = cb; }
 
-         int width() const { return map.pix_width(); }
-         int height() const { return map.pix_height(); }
+         int width() const { return blit_tilemap_pix_width(map); }
+         int height() const { return blit_tilemap_pix_height(map); }
 
          unsigned get_pushes() const { return pushes; }
          ~Game();
@@ -196,7 +205,7 @@ namespace Icy
          static const unsigned fb_height = 200;
 
       private:
-         Blit::Tilemap map;
+         blit_tilemap_t *map;
          blit_render_target_t target;
          blit_surface_t player;
          Blit::Pos player_off;
@@ -259,7 +268,7 @@ namespace Icy
          std::string input_to_string(Input input);
          Input string_to_input(const std::string& dir);
 
-         std::vector<Blit::SurfaceCluster::Elem*> get_tiles_with_attr(const std::string& layer,
+         std::vector<blit_cluster_elem_t*> get_tiles_with_attr(const std::string& layer,
                const std::string& attr, const std::string& val = "");
 
          EdgeDetector push;

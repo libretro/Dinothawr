@@ -9,7 +9,6 @@ SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
 	$(CORE_DIR)/libretro.cpp \
 	$(CORE_DIR)/sfx_manager.cpp \
 	$(CORE_DIR)/surface_cluster.cpp \
-	$(CORE_DIR)/tilemap.cpp \
 
 SOURCES_C :=
 
@@ -25,6 +24,7 @@ SOURCES_C += $(CORE_DIR)/blit_tile_set.c
 SOURCES_C += $(CORE_DIR)/blit_xml.c
 SOURCES_C += $(CORE_DIR)/blit_surface_cache.c
 SOURCES_C += $(CORE_DIR)/blit_font.c
+SOURCES_C += $(CORE_DIR)/blit_tilemap.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c
