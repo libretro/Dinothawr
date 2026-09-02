@@ -2,6 +2,7 @@
 #include "icy_collide.h"
 #include "icy_anim.h"
 #include "icy_goal.h"
+#include "icy_tiles.h"
 #include <cstring>
 #include "utils.hpp"
 #include <iostream>
@@ -167,28 +168,18 @@ namespace Icy
    /* A plain scan rather than copy_if over a reference_wrapper vector:
     * the elements are about to stop living in a std::vector, and this
     * form does not care what holds them. */
+   /* A thin wrapper while the callers are still C++: the search is
+    * icy_tiles.c, this only sizes the vector. */
    vector<blit_cluster_elem_t*> Game::get_tiles_with_attr(const string& name,
          const string& attr, const string& val)
    {
-      vector<blit_cluster_elem_t*> surfs;
-      blit_layer_t *layer = blit_tilemap_find_layer(map, name.c_str());
-      if (!layer)
-         return surfs;
+      size_t count = icy_tiles_with_attr(map, name.c_str(), attr.c_str(),
+            val.c_str(), NULL, 0);
+      vector<blit_cluster_elem_t*> surfs(count);
 
-      {
-         blit_surface_cluster_t& cluster = layer->cluster;
-         size_t i;
-
-         for (i = 0; i < cluster.count; i++)
-         {
-            blit_cluster_elem_t *elem = &cluster.elems[i];
-            const char *found = blit_attr_table_find(elem->surf.attribs,
-                  attr.c_str());
-
-            if (val.empty() ? (found != NULL) : (found && val == found))
-               surfs.push_back(elem);
-         }
-      }
+      if (count)
+         icy_tiles_with_attr(map, name.c_str(), attr.c_str(), val.c_str(),
+               &surfs[0], count);
 
       return surfs;
    }
