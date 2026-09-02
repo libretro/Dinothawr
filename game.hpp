@@ -16,10 +16,9 @@
 #include "audio/mixer_i16.h"
 #include "audio/game_audio.h"
 
-#include <string>
-#include <functional>
 #include <cstddef>
 #include <functional>
+#include <string>
 
 #include "libretro.h"
 
@@ -155,8 +154,19 @@ namespace Icy
          std::function<bool (Input)> m_input_cb;
          std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
 
-         std::function<bool ()> stepper;
+         /* What is being stepped, if anything. There are exactly two
+          * things it can be - a surface crossing a tile, or the win
+          * animation - and a std::function was carrying a bound this,
+          * a reference to one of two surfaces, and a direction, to say
+          * which. Naming the two cases says the same thing without an
+          * indirect call or a captured reference to a member. */
+         enum class Stepper { None, Tile, WinAnimation };
+         Stepper   stepper;
+         blit_surface_t *stepper_surf;
+         Blit::Pos       stepper_dir;
+
          void run_stepper();
+         void begin_tile_stepper(blit_surface_t& surf, Blit::Pos dir);
 
          unsigned frame_cnt;
          bool player_walking;

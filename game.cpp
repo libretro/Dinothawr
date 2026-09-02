@@ -46,6 +46,9 @@ namespace Icy
          throw std::bad_alloc();
       /* player is a raw surface: no constructor to zero it, and the
        * destructor below is what releases it. */
+      stepper      = Stepper::None;
+      stepper_surf = NULL;
+      stepper_dir  = blit_pos_zero();
       icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
       m_won_early = false;
@@ -61,6 +64,9 @@ namespace Icy
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
          throw std::bad_alloc();
+      stepper      = Stepper::None;
+      stepper_surf = NULL;
+      stepper_dir  = blit_pos_zero();
       icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
       m_won_early = false;
@@ -228,7 +234,7 @@ namespace Icy
 
       push.set(true); // Avoid exiting win animation early.
       m_won_early = false;
-      stepper = bind(&Game::win_animation_stepper, this);
+      stepper = Stepper::WinAnimation;
       icy_sfx_play(icy_sfx(), "frozen_dino_melt", 0.25f);
    }
 
@@ -274,27 +280,27 @@ namespace Icy
       if (!m_input_cb)
          return;
       
-      bool had_stepper = static_cast<bool>(stepper);
+      bool had_stepper = stepper != Stepper::None;
       run_stepper();
 
       if (won_frame_cnt)
          return;
 
-      if (!stepper)
+      if (stepper == Stepper::None)
          update_input();
       else
          update_triggers();
 
       // Reset animation.
-      if (!had_stepper && stepper)
+      if (!had_stepper && stepper != Stepper::None)
          frame_cnt = 0;
-      else if (!stepper)
+      else if (stepper == Stepper::None)
       {
          frame_cnt = 0;
          set_player_alt_index(0);
       }
 
-      if (stepper && player_walking)
+      if (stepper != Stepper::None && player_walking)
          update_animation();
 
       if (won_condition())
@@ -366,7 +372,7 @@ namespace Icy
 
       if (!blit_tilemap_collision(map, tile_pos + (2 * offset)))
       {
-         stepper = bind(&Game::tile_stepper, this, ref(*tile), offset);
+         begin_tile_stepper(*tile, offset);
          begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
          stepper_cnt = 0;
          player_walking = false;
@@ -384,7 +390,7 @@ namespace Icy
       Blit::Pos offset = icy_input_offset((enum icy_input)input);
       if (!is_offset_collision(player, offset))
       {
-         stepper = bind(&Game::tile_stepper, this, ref(player), offset);
+         begin_tile_stepper(player, offset);
          begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
          player_walking = true;
       }
@@ -437,10 +443,31 @@ namespace Icy
       return slippery;
    }
 
+   void Game::begin_tile_stepper(blit_surface_t& surf, Pos dir)
+   {
+      stepper      = Stepper::Tile;
+      stepper_surf = &surf;
+      stepper_dir  = dir;
+   }
+
    void Game::run_stepper()
    {
-      if (stepper && !stepper())
-         stepper = {};
+      bool more;
+
+      switch (stepper)
+      {
+         case Stepper::Tile:
+            more = tile_stepper(*stepper_surf, stepper_dir);
+            break;
+         case Stepper::WinAnimation:
+            more = win_animation_stepper();
+            break;
+         default:
+            return;
+      }
+
+      if (!more)
+         stepper = Stepper::None;
    }
 
    CameraManager::CameraManager(blit_render_target_t& target, const Rect& rect, Blit::Pos map_size)
