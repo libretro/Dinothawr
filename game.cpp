@@ -1,6 +1,7 @@
 #include "game.hpp"
 #include "icy_collide.h"
 #include "icy_anim.h"
+#include "icy_goal.h"
 #include <cstring>
 #include "utils.hpp"
 #include <iostream>
@@ -246,23 +247,13 @@ namespace Icy
          || (won_frame_cnt >= frames_to_ticks(won_frame_cnt_limit));
    }
 
-   static bool is_game_won(const blit_cluster_elem_t *a,
-         const blit_cluster_elem_t *b)
-   {
-      return blit_pos_equal(a->surf.rect.pos, b->surf.rect.pos) != 0;
-   }
-
-   static bool sort_blocks(const blit_cluster_elem_t *a,
-         const blit_cluster_elem_t *b)
-   {
-      return blit_pos_less(a->surf.rect.pos, b->surf.rect.pos) != 0;
-   }
-
-   // Checks if all goals on floor and blocks are aligned with each other.
    bool Game::won_condition()
    {
       std::vector<blit_cluster_elem_t*> goal_floor  = get_tiles_with_attr("floor", "goal", "true");
       std::vector<blit_cluster_elem_t*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      std::vector<Blit::Pos>            goals;
+      std::vector<Blit::Pos>            blocks;
+      size_t i;
 
       if (goal_floor.size() != goal_blocks.size())
          throw logic_error("Number of goal floors and goal blocks do not match.");
@@ -270,11 +261,13 @@ namespace Icy
       if (goal_floor.empty() || goal_blocks.empty())
          throw logic_error("Goal floor or blocks are empty.");
 
-      sort(goal_floor.begin(), goal_floor.end(), sort_blocks);
-      sort(goal_blocks.begin(), goal_blocks.end(), sort_blocks);
+      for (i = 0; i < goal_floor.size(); i++)
+      {
+         goals.push_back(goal_floor[i]->surf.rect.pos);
+         blocks.push_back(goal_blocks[i]->surf.rect.pos);
+      }
 
-      return equal(goal_floor.begin(), goal_floor.end(),
-            goal_blocks.begin(), is_game_won);
+      return icy_goal_all_covered(&goals[0], &blocks[0], goals.size()) != 0;
    }
 
    void Game::update_player()
