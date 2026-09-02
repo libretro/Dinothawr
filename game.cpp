@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "icy_collide.h"
 #include <cstring>
 #include "utils.hpp"
 #include <iostream>
@@ -339,35 +340,15 @@ namespace Icy
          move_if_no_collision(Input::Right);
    }
 
+   /* The check itself is grid arithmetic and lives in icy_collide.c;
+    * what stays here is the assertion, because only the game knows that
+    * an off-grid surface means a broken level rather than a bad call. */
    bool Game::is_offset_collision(blit_surface_t& surf, Pos offset)
    {
-      Blit::Rect new_rect = surf.rect + offset;
-
-      // Always assume that the rect in question is inside a single tile.
-      // This is needed as the dino sprite can be slightly larger than 16x16, but it's
-      // *assumed* from a collition detection POV that a surface is tile sized to simplify things.
-      new_rect.w = blit_tilemap_tile_width(map);
-      new_rect.h = blit_tilemap_tile_height(map);
-
-      bool outside_grid = surf.rect.pos.x % blit_tilemap_tile_width(map) || surf.rect.pos.y % blit_tilemap_tile_height(map);
-      if (outside_grid)
+      if (!icy_collide_aligned(map, surf.rect))
          throw logic_error("Offset collision check was performed outside tile grid.");
 
-      int current_x = surf.rect.pos.x / blit_tilemap_tile_width(map);
-      int current_y = surf.rect.pos.y / blit_tilemap_tile_height(map);
-
-      int min_tile_x = new_rect.pos.x / blit_tilemap_tile_width(map);
-      int max_tile_x = (new_rect.pos.x + new_rect.w - 1) / blit_tilemap_tile_width(map);
-
-      int min_tile_y = new_rect.pos.y / blit_tilemap_tile_height(map);
-      int max_tile_y = (new_rect.pos.y + new_rect.h - 1) / blit_tilemap_tile_height(map);
-
-      for (int y = min_tile_y; y <= max_tile_y; y++)
-         for (int x = min_tile_x; x <= max_tile_x; x++)
-            if (blit_pos(x, y) != blit_pos(current_x, current_y) && blit_tilemap_collision(map, blit_pos(x, y))) // Can't collide against ourselves.
-               return true;
-
-      return false;
+      return icy_collide_offset(map, surf.rect, offset) != 0;
    }
 
    void Game::push_block()
