@@ -10,6 +10,7 @@
 #include "icy_edge.h"
 #include "icy_input.h"
 #include "icy_leg.h"
+#include "icy_camera.h"
 #include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
@@ -74,18 +75,6 @@ namespace Icy
       None  = ICY_INPUT_NONE
    };
 
-   class CameraManager
-   {
-      public:
-         CameraManager(blit_render_target_t& target, const Blit::Rect& rect, Blit::Pos map_size);
-         void update();
-
-      private:
-         blit_render_target_t* target;
-         const Blit::Rect* rect;
-         Blit::Pos map_size;
-   };
-
    class EdgeDetector
    {
       public:
@@ -139,7 +128,6 @@ namespace Icy
          const blit_surface_t *bg;
          Input facing;
 
-         CameraManager camera;
 
          unsigned won_frame_cnt;
          bool m_won_early;

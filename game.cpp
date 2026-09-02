@@ -11,9 +11,8 @@ using namespace std;
 
 namespace Icy
 {
-   /* Loads in the initialiser list, because CameraManager is constructed
-    * there and needs the map's size. Loading in the body instead handed
-    * it a NULL map and a zero-sized world. */
+   /* Loads in the initialiser list: the map has to exist before
+    * anything that reads its size. */
    static blit_tilemap_t *load_map(const std::string& path)
    {
       char            err[256];
@@ -39,7 +38,6 @@ namespace Icy
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(font),
-         camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
          won_frame_cnt(0), is_sliding(false), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
    {
@@ -60,7 +58,6 @@ namespace Icy
    Game::Game(const string& level_path)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(NULL),
-         camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
          won_frame_cnt(0), is_sliding(false), push(true)
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
@@ -140,7 +137,11 @@ namespace Icy
       else
          blit_render_target_clear(&target, blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 
-      camera.update();
+      /* The camera follows the player over the map; both are read fresh,
+       * so nothing has to be told when either moves. */
+      icy_camera_update(&target, player.rect,
+            blit_pos(blit_tilemap_pix_width(map),
+               blit_tilemap_pix_height(map)));
 
       blit_tilemap_render(map, &target);
       blit_render_target_blit_offset(&target, &player, blit_rect_zero(), player_off);
@@ -462,39 +463,6 @@ namespace Icy
 
       if (!more)
          stepper = Stepper::None;
-   }
-
-   CameraManager::CameraManager(blit_render_target_t& target, const Rect& rect, Blit::Pos map_size)
-      : target(&target), rect(&rect), map_size(map_size)
-   {}
-
-   void CameraManager::update()
-   {
-      // Map can fit completely inside our rect, just center it.
-      if (target->rect.w >= map_size.x && target->rect.h >= map_size.y)
-         target->rect.pos = ((map_size - blit_pos(target->rect.w, target->rect.h)) / 2);
-      else // Center around player, but clamp if player isn't near walls.
-      {
-         Blit::Pos pos = rect->pos;
-         pos += blit_pos(rect->w, rect->h) / 2;
-
-         Pos target_size = blit_pos(target->rect.w, target->rect.h);
-
-         Blit::Pos pos_base = pos - target_size / 2;
-         Blit::Pos pos_max  = pos_base + target_size;
-
-         if (pos_base.x < 0)
-            pos_base.x = 0;
-         else if (pos_max.x > map_size.x)
-            pos_base.x -= pos_max.x - map_size.x;
-
-         if (pos_base.y < 0)
-            pos_base.y = 0;
-         else if (pos_max.y > map_size.y)
-            pos_base.y -= pos_max.y - map_size.y;
-
-         target->rect.pos = (pos_base);
-      }
    }
 }
 
