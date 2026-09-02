@@ -82,18 +82,19 @@ namespace Blit
 
       clear_glyphs();
 
-      Blit::Xml::Document doc;
-      if (!doc.load_file(font.c_str()))
+      xml_doc doc;
+      if (!doc.load(font.c_str()))
          throw runtime_error(Utils::join("Failed to load font: ", font, "."));
 
-      Blit::Xml::Node glyph       = doc.child("font").child("glyphs");
-      char start_ascii = glyph.attribute("startascii").as_int();
+      rxml_node_t *glyph = blit_xml_child(blit_xml_root(doc.get(), "font"),
+            "glyphs");
+      char start_ascii = blit_xml_attr_int(glyph, "startascii");
 
-      int width   = glyph.attribute("width").as_int();
-      int height  = glyph.attribute("height").as_int();
-      glyphwidth  = glyph.attribute("glyphwidth").as_int();
-      glyphheight = glyph.attribute("glyphheight").as_int();
-      const char * source = glyph.attribute("source").value();
+      int width   = blit_xml_attr_int(glyph, "width");
+      int height  = blit_xml_attr_int(glyph, "height");
+      glyphwidth  = blit_xml_attr_int(glyph, "glyphwidth");
+      glyphheight = blit_xml_attr_int(glyph, "glyphheight");
+      const char * source = blit_xml_attr(glyph, "source");
 
       if (!width || !height || !glyphwidth || !glyphheight)
          throw logic_error("Invalid glpyh arguments.");

@@ -66,11 +66,11 @@ namespace Blit
          std::string dir;
 
          void add_tileset(blit_tile_set_t *tiles,
-               Blit::Xml::Node node);
+               rxml_node_t* node);
          void add_layer(blit_tile_set_t *tiles,
-               Blit::Xml::Node node, int tilewidth, int tileheight);
+               rxml_node_t* node, int tilewidth, int tileheight);
 
-         std::map<std::string, std::string> get_attributes(Blit::Xml::Node, const std::string& child) const;
+         std::map<std::string, std::string> get_attributes(rxml_node_t*, const std::string& child) const;
    };
 }
 

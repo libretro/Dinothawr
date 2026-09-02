@@ -84,8 +84,8 @@ namespace Blit
 
 
       {
-         Blit::Xml::Document doc;
-         if (!doc.load_file(path.c_str()))
+         xml_doc doc;
+         if (!doc.load(path.c_str()))
             throw std::runtime_error(Utils::join("Failed to load XML sprite: ", path, "."));
 
          std::basic_string<char> basedir = Utils::basedir(path);
@@ -97,16 +97,16 @@ namespace Blit
          if (!(def->alts = blit_alt_table_new()))
             throw std::bad_alloc();
 
-         Blit::Xml::Node sprite = doc.child("sprite");
-         for (Blit::Xml::Node face = sprite.child("face"); face; face = face.next_sibling())
+         rxml_node_t *sprite = blit_xml_root(doc.get(), "sprite");
+         for (rxml_node_t *face = blit_xml_child(sprite, "face"); face; face = blit_xml_next_any(face))
          {
-            const char *id    = face.attribute("id").value();
-            const char *frame = face.attribute("frame").value();
-            std::basic_string<char> path   = Utils::join(basedir, "/", face.attribute("source").value());
+            const char *id    = blit_xml_attr(face, "id");
+            const char *frame = blit_xml_attr(face, "frame");
+            std::basic_string<char> path   = Utils::join(basedir, "/", blit_xml_attr(face, "source"));
 
             blit_surface_data_t *ptr;
             if (*frame)
-               ptr = load_apng_frame(path, face.attribute("frame").as_int());
+               ptr = load_apng_frame(path, blit_xml_attr_int(face, "frame"));
             else
             {
                ptr = (blit_surface_data_t*)blit_str_map_find(cache, path.c_str());
@@ -122,7 +122,7 @@ namespace Blit
                throw std::bad_alloc();
          }
 
-         def->start_id = strdup(sprite.attribute("start_id").value());
+         def->start_id = strdup(blit_xml_attr(sprite, "start_id"));
          if (!def->start_id
                || !blit_str_map_set(sprites, path.c_str(), def, NULL, NULL))
             throw std::bad_alloc();

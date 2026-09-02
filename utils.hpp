@@ -47,6 +47,12 @@ namespace Blit
          return ret;
       }
 
+      template <typename T, typename... U>
+      inline std::unique_ptr<T> make_unique(U&&... u)
+      {
+         return std::unique_ptr<T>(new T(std::forward<U>(u)...));
+      }
+
       inline std::string basedir(const std::string& path)
       {
          std::string::size_type last = path.find_last_of("/\\");
@@ -96,56 +102,6 @@ namespace Blit
             return def;
 
          return itr->second;
-      }
-
-      class xml_node_walker
-      {
-         public:
-            xml_node_walker(Blit::Xml::Node parent, const std::string& child, const std::string& attr)
-               : parent(parent), child(child), attr(attr)
-            {}
-
-            class iterator
-            {
-               public:
-                  iterator(Blit::Xml::Node parent, const char* child, const char* attr) :
-                     child_name(child), attr(attr), node(parent.child(child)), val(node.attribute(attr).value()) {}
-
-                  iterator() : child_name(NULL), attr(NULL) {}
-
-                  const std::string& operator*() const { return val; }
-                  const std::string* operator->() const { return &val; }
-
-                  iterator& operator++()
-                  {
-                     node = node.next_sibling(child_name);
-                     val  = node.attribute(attr).value();
-                     return *this;
-                  }
-
-                  bool operator==(const iterator& itr) const { return node == itr.node; }
-                  bool operator!=(const iterator& itr) const { return node != itr.node; }
-
-               private:
-                  const char* child_name;
-                  const char* attr;
-                  Blit::Xml::Node node;
-                  std::string val;
-            };
-
-            iterator begin() { return iterator(parent, child.c_str(), attr.c_str()); }
-            iterator end() { return iterator(); }
-
-         private:
-            Blit::Xml::Node parent;
-            std::string child;
-            std::string attr;
-      };
-
-      template <typename T, typename... Args>
-      std::unique_ptr<T> make_unique(Args&&... args)
-      {
-         return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
       }
 
    }

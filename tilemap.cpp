@@ -15,15 +15,15 @@ namespace Blit
 {
    Tilemap::Tilemap(const std::string& path) : dir(Utils::basedir(path))
    {
-      Blit::Xml::Document doc;
-      if (!doc.load_file(path.c_str()))
+      xml_doc doc;
+      if (!doc.load(path.c_str()))
          throw std::runtime_error(Utils::join("Failed to load XML map: ", path, "."));
 
-      Blit::Xml::Node map   = doc.child("map");
-      width      = map.attribute("width").as_int();
-      height     = map.attribute("height").as_int();
-      tilewidth  = map.attribute("tilewidth").as_int();
-      tileheight = map.attribute("tileheight").as_int();
+      rxml_node_t *map   = blit_xml_root(doc.get(), "map");
+      width      = blit_xml_attr_int(map, "width");
+      height     = blit_xml_attr_int(map, "height");
+      tilewidth  = blit_xml_attr_int(map, "tilewidth");
+      tileheight = blit_xml_attr_int(map, "tileheight");
 
       if (!width || !height || !tilewidth || !tileheight)
          throw std::logic_error("Tilemap is malformed.");
@@ -33,45 +33,46 @@ namespace Blit
       if (!tiles)
          throw std::bad_alloc();
 
-      for (auto set = map.child("tileset"); set; set = set.next_sibling("tileset"))
+      for (auto set = blit_xml_child(map, "tileset"); set; set = blit_xml_next(set, "tileset"))
          add_tileset(tiles, set);
 
-      for (auto layer = map.child("layer"); layer; layer = layer.next_sibling("layer"))
+      for (auto layer = blit_xml_child(map, "layer"); layer; layer = blit_xml_next(layer, "layer"))
          add_layer(tiles, layer, tilewidth, tileheight);
 
       blit_tile_set_free(tiles);
    }
 
-   std::map<std::string, std::string> Tilemap::get_attributes(Blit::Xml::Node parent, const std::string& child) const
+   std::map<std::string, std::string> Tilemap::get_attributes(rxml_node_t *parent, const std::string& child) const
    {
       std::map<std::string, std::string> attrs;
 
-      for (auto node = parent.child(child.c_str()); node; node = node.next_sibling(child.c_str()))
+      for (rxml_node_t *node = blit_xml_child(parent, child.c_str()); node;
+            node = blit_xml_next(node, child.c_str()))
       {
-         const char *name = node.attribute("name").value();
-         const char *value = node.attribute("value").value();
+         const char *name = blit_xml_attr(node, "name");
+         const char *value = blit_xml_attr(node, "value");
          attrs.insert({name, value});
       }
 
       return attrs;
    }
 
-   void Tilemap::add_tileset(blit_tile_set_t *tiles, Blit::Xml::Node node)
+   void Tilemap::add_tileset(blit_tile_set_t *tiles, rxml_node_t *node)
    {
-      int first_gid  = node.attribute("firstgid").as_int();
+      int first_gid  = blit_xml_attr_int(node, "firstgid");
       int id_cnt     = 0;
-      int tilewidth  = node.attribute("tilewidth").as_int();
-      int tileheight = node.attribute("tileheight").as_int();
+      int tilewidth  = blit_xml_attr_int(node, "tilewidth");
+      int tileheight = blit_xml_attr_int(node, "tileheight");
 
-      Blit::Xml::Node image     = node.child("image");
-      const char *source    = image.attribute("source").value();
-      int width      = image.attribute("width").as_int();
-      int height     = image.attribute("height").as_int();
+      rxml_node_t *image     = blit_xml_child(node, "image");
+      const char *source    = blit_xml_attr(image, "source");
+      int width      = blit_xml_attr_int(image, "width");
+      int height     = blit_xml_attr_int(image, "height");
 
       if (!width || !height || !tilewidth || !tileheight)
          throw std::logic_error("Tilemap is malformed.");
 
-      std::map<std::basic_string<char>, std::basic_string<char> > global_attr = get_attributes(node.child("properties"), "property");
+      std::map<std::basic_string<char>, std::basic_string<char> > global_attr = get_attributes(blit_xml_child(node, "properties"), "property");
 
       /* An .apng tileset carries one tile per frame, in the same
        * row-major order the sheet was cut in, so the local tile id is
@@ -147,11 +148,11 @@ namespace Blit
       }
 
       // Load all attributes for a tile into the surface.
-      for (auto tile = node.child("tile"); tile; tile = tile.next_sibling("tile"))
+      for (auto tile = blit_xml_child(node, "tile"); tile; tile = blit_xml_next(tile, "tile"))
       {
-         int id = first_gid + tile.attribute("id").as_int();
+         int id = first_gid + blit_xml_attr_int(tile, "id");
 
-         std::map<std::basic_string<char>, std::basic_string<char> > attrs = get_attributes(tile.child("properties"), "property");
+         std::map<std::basic_string<char>, std::basic_string<char> > attrs = get_attributes(blit_xml_child(tile, "properties"), "property");
          std::copy(global_attr.begin(), global_attr.end(), std::inserter(attrs, attrs.begin()));
 
          auto itr = attrs.find("sprite");
@@ -181,23 +182,26 @@ namespace Blit
       }
    }
 
-   void Tilemap::add_layer(blit_tile_set_t *tiles, Blit::Xml::Node node,
+   void Tilemap::add_layer(blit_tile_set_t *tiles, rxml_node_t *node,
          int tilewidth, int tileheight)
    {
       Layer layer;
-      int width  = node.attribute("width").as_int();
-      int height = node.attribute("height").as_int();
+      int width  = blit_xml_attr_int(node, "width");
+      int height = blit_xml_attr_int(node, "height");
 
       if (!width || !height)
          throw std::logic_error("Layer is empty.");
 
-      Utils::xml_node_walker walk{node.child("data"), "tile", "gid"};
+      rxml_node_t *data = blit_xml_child(node, "data");
+      rxml_node_t *tile_node;
       int index = 0;
-      for (auto& gid_str : walk)
+
+      for (tile_node = blit_xml_child(data, "tile"); tile_node;
+            tile_node = blit_xml_next(tile_node, "tile"))
       {
          Pos pos = blit_pos(index % width, index / width);
 
-         unsigned gid = Utils::stoi(gid_str);
+         unsigned gid = Utils::stoi(blit_xml_attr(tile_node, "gid"));
          if (gid)
          {
             blit_surface_t *tile = blit_tile_set_get(tiles, gid);
@@ -226,8 +230,8 @@ namespace Blit
          index++;
       }
 
-      layer.attr = get_attributes(node.child("properties"), "property");
-      layer.name = node.attribute("name").value();
+      layer.attr = get_attributes(blit_xml_child(node, "properties"), "property");
+      layer.name = blit_xml_attr(node, "name");
       m_layers.push_back(std::move(layer));
    }
 

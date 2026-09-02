@@ -1,10 +1,6 @@
 #ifndef XML_HPP__
 #define XML_HPP__
 
-#include <cstdlib>
-#include <cstring>
-#include <string>
-
 #include "blit_xml.h"
 
 /* A thin, pugixml-shaped view over libretro-common's rxml.
@@ -21,83 +17,30 @@
  * attribute() on a missing attribute yields "" rather than NULL, which is
  * what pugixml does and what the call sites assume. */
 
-namespace Blit
+/* Owns a parsed document; every node handed out points into it and is
+ * only valid while it lives. The lookups themselves are blit_xml.h -
+ * this is just the lifetime, which C++ call sites still want. */
+class xml_doc
 {
-   namespace Xml
-   {
-      /* Thin C++ shims over blit_xml.h, kept while the call sites still
-       * read like pugixml. Each one is a forward; they go as the callers
-       * convert. */
-      class Attribute
+   public:
+      xml_doc() : doc(NULL) {}
+      ~xml_doc() { if (doc) rxml_free_document(doc); }
+
+      xml_doc(const xml_doc&) = delete;
+      xml_doc& operator=(const xml_doc&) = delete;
+
+      bool load(const char *path)
       {
-         public:
-            Attribute(const char *value) : v(value ? value : "") {}
+         if (doc)
+            rxml_free_document(doc);
+         doc = blit_xml_load(path);
+         return doc != NULL;
+      }
 
-            const char *value() const { return v; }
-            int as_int() const { return (int)std::strtol(v, NULL, 0); }
+      rxml_document_t *get() const { return doc; }
 
-         private:
-            const char *v;
-      };
-
-      class Node
-      {
-         public:
-            Node(rxml_node_t *node = NULL) : n(node) {}
-
-            explicit operator bool() const { return n != NULL; }
-
-            bool operator==(const Node& o) const { return n == o.n; }
-            bool operator!=(const Node& o) const { return n != o.n; }
-
-            const char *name() const { return (n && n->name) ? n->name : ""; }
-            const char *data() const { return (n && n->data) ? n->data : ""; }
-
-            Node child(const char *name) const
-            { return Node(blit_xml_child(n, name)); }
-
-            Node next_sibling(const char *name) const
-            { return Node(blit_xml_next(n, name)); }
-
-            Node next_sibling() const
-            { return Node(blit_xml_next_any(n)); }
-
-            Attribute attribute(const char *name) const
-            { return Attribute(blit_xml_attr(n, name)); }
-
-         private:
-            rxml_node_t *n;
-      };
-
-      /* Owns the parsed tree; every Node handed out points into it. */
-      class Document
-      {
-         public:
-            Document() : doc(NULL) {}
-            ~Document() { if (doc) rxml_free_document(doc); }
-
-            Document(const Document&) = delete;
-            Document& operator=(const Document&) = delete;
-
-            bool load_file(const char *path)
-            {
-               if (doc)
-               {
-                  rxml_free_document(doc);
-                  doc = NULL;
-               }
-
-               doc = blit_xml_load(path);
-               return doc != NULL;
-            }
-
-            Node child(const char *name) const
-            { return Node(blit_xml_root(doc, name)); }
-
-         private:
-            rxml_document_t *doc;
-      };
-   }
-}
+   private:
+      rxml_document_t *doc;
+};
 
 #endif

@@ -453,12 +453,12 @@ namespace Icy
 
          void init_menu_surfaces();
          void init_menu(const std::string& title);
-         void init_menu_sprite(Blit::Xml::Node game_node);
+         void init_menu_sprite(rxml_node_t* game_node);
          void init_level(unsigned chapter, unsigned level);
-         void init_sfx(Blit::Xml::Node game_node);
-         void init_bg(Blit::Xml::Node game_node);
+         void init_sfx(rxml_node_t* game_node);
+         void init_bg(rxml_node_t* game_node);
 
-         Chapter load_chapter(Blit::Xml::Node chap_node, int chapter);
+         Chapter load_chapter(rxml_node_t* chap_node, int chapter);
          const Level& get_selected_level() const;
 
          void step_title();
