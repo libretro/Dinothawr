@@ -17,6 +17,8 @@
 
 #include <stddef.h>
 
+#include "icy_levels.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,6 +34,33 @@ void icy_save_encode(char *buf, size_t len, const unsigned *counts,
  * which is what an unplayed game looks like. */
 void icy_save_decode(const char *buf, size_t len, unsigned *counts,
       const unsigned *levels_per_chapter, size_t chapters);
+
+/* The save the frontend sees, and the two operations on it. Fixed size
+ * because the frontend is handed the buffer and its length once. */
+enum
+{
+   ICY_SAVE_SIZE = 512,
+
+   /* The buffer holds a few bytes per level, so these are far above what
+    * fits in it; they exist so the conversion can use fixed arrays. */
+   ICY_SAVE_MAX_CHAPTERS = 64,
+   ICY_SAVE_MAX_LEVELS   = 512
+};
+
+typedef struct
+{
+   char data[ICY_SAVE_SIZE];
+} icy_save_t;
+
+void icy_save_clear(icy_save_t *save);
+
+/* Writes @list's best-push counts into the buffer. */
+void icy_save_store(icy_save_t *save, const icy_level_list_t *list);
+
+/* Reads the buffer back into @list. Levels the save does not mention
+ * keep what they have, so a short or empty save leaves an unplayed game
+ * unplayed. */
+void icy_save_load(const icy_save_t *save, icy_level_list_t *list);
 
 #ifdef __cplusplus
 }

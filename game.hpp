@@ -13,6 +13,7 @@
 #include "icy_rate.h"
 #include "icy_game.h"
 #include "icy_levels.h"
+#include "icy_save.h"
 #include "icy_input.h"
 #include "icy_leg.h"
 #include "icy_camera.h"
@@ -111,33 +112,13 @@ namespace Icy
          unsigned current_level() const { return m_current_level; }
          State game_state() const { return m_game_state; }
 
-         std::size_t save_size() const { return save.size(); }
-         void* save_data() { return save.data(); }
+         std::size_t save_size() const { return sizeof(save.data); }
+         void* save_data() { return save.data; }
 
       private:
 
-         class SaveManager
-         {
-            public:
-               SaveManager(icy_level_list_t &chaps);
-
-               void *data();
-               void serialize();
-               void unserialize();
-               std::size_t size() const;
-
-            private:
-               icy_level_list_t &chaps;
-               std::vector<char> save_data;
-               static const std::size_t save_game_size = 512;
-         };
-
-         /* chapters must be declared before save: SaveManager holds a
-          * reference to it and is handed that reference in the member
-          * initialiser list, so it has to be constructed first. */
          icy_level_list_t chapters;
-
-         SaveManager save;
+         icy_save_t       save;
 
          /* The level in play, or nothing while in the menu. */
          struct GameDeleter

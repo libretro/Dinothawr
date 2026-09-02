@@ -89,7 +89,7 @@ namespace Icy
    GameManager::GameManager(const string& path_game,
          input_fn input_cb,
          video_fn video_cb)
-      : save(chapters), dir(path_dir(path_game)),
+      : dir(path_dir(path_game)),
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
       m_input_cb(input_cb), m_input_ctx(NULL),
       m_video_cb(video_cb), m_video_ctx(NULL),
@@ -185,7 +185,7 @@ namespace Icy
    }
 
    GameManager::GameManager()
-      : save(chapters),
+      :
       m_current_chap(0), m_current_level(0), m_game_state(State::Game),
       chap_select(0), level_select(0),
       menu_slide_dir(blit_pos_zero())
@@ -201,6 +201,7 @@ namespace Icy
    {
       /* Plain C members in a C++ class: nothing initialises them. */
       icy_level_list_init(&chapters);
+      icy_save_clear(&save);
       font = NULL;
       blit_render_target_init(&target);
       blit_render_target_init(&ui_target);
@@ -434,7 +435,7 @@ namespace Icy
    // start menu there.
    void GameManager::set_initial_level()
    {
-      save.unserialize();
+      icy_save_load(&save, &chapters);
       m_current_chap = 0;
       m_current_level = 0;
       if (!find_next_unsolved_level(m_current_chap, m_current_level))
@@ -457,7 +458,7 @@ namespace Icy
 
    void GameManager::enter_menu()
    {
-      save.unserialize();
+      icy_save_load(&save, &chapters);
       /* Entering the menu from a press: do not act on the same press
        * again on the first menu frame. */
       icy_edge_suppress(&edges, ICY_EDGE_OK);
@@ -655,7 +656,6 @@ namespace Icy
       else if (icy_edge_pressed(&edges, ICY_EDGE_MENU, pressed_menu))
          enter_menu();
 
-
       if (icy_game_won(game.get()))
       {
          unsigned pushes = icy_game_pushes(game.get());
@@ -664,7 +664,7 @@ namespace Icy
          game.reset();
          bool trigger_completion = !chapters.chapters[m_current_chap].levels[m_current_level].completed;
          chapters.chapters[m_current_chap].levels[m_current_level].completed = 1;
-         save.serialize();
+         icy_save_store(&save, &chapters);
 
          // Go to ending screen on the event that all levels have been cleared.
          bool cleared_all = trigger_completion;
@@ -822,70 +822,5 @@ namespace Icy
       return preview;
    }
 
-   GameManager::SaveManager::SaveManager(icy_level_list_t &chaps)
-      : chaps(chaps)
-   {
-      save_data.resize(save_game_size);
-   }
-
-
-   void* GameManager::SaveManager::data()
-   {
-      return save_data.data();
-   }
-
-   /* Gathers the layout and the counts, and lets icy_save.c do the
-    * encoding: what the bytes look like is not this class's business. */
-   void GameManager::SaveManager::serialize()
-   {
-      std::vector<unsigned> counts;
-      std::vector<unsigned> per_chapter;
-      size_t c;
-
-      for (c = 0; c < chaps.count; c++)
-      {
-         per_chapter.push_back((unsigned)chaps.chapters[c].count);
-         for (size_t l = 0; l < chaps.chapters[c].count; l++)
-            counts.push_back(chaps.chapters[c].levels[l].best_pushes);
-      }
-
-      icy_save_encode(save_data.data(), save_data.size(),
-            counts.empty() ? NULL : &counts[0],
-            per_chapter.empty() ? NULL : &per_chapter[0],
-            per_chapter.size());
-   }
-
-   void GameManager::SaveManager::unserialize()
-   {
-      std::vector<unsigned> counts;
-      std::vector<unsigned> per_chapter;
-      size_t c;
-      size_t flat = 0;
-
-      for (c = 0; c < chaps.count; c++)
-      {
-         per_chapter.push_back((unsigned)chaps.chapters[c].count);
-         for (size_t l = 0; l < chaps.chapters[c].count; l++)
-            counts.push_back(0);
-      }
-
-      if (counts.empty())
-         return;
-
-      icy_save_decode(save_data.data(), save_data.size(), &counts[0],
-            &per_chapter[0], per_chapter.size());
-
-      for (c = 0; c < chaps.count; c++)
-      {
-         for (size_t l = 0; l < chaps.chapters[c].count; l++, flat++)
-            icy_level_record_clear(&chaps.chapters[c].levels[l],
-                  counts[flat]);
-      }
-   }
-
-   size_t GameManager::SaveManager::size() const
-   {
-      return save_data.size();
-   }
 }
 
