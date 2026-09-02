@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <assert.h>
 
-using namespace Blit;
 using namespace std;
 
 namespace Icy
@@ -431,7 +430,7 @@ namespace Icy
          enter_menu();
       }
 
-      m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(blit_pixel_t));
    }
 
    void GameManager::enter_menu()
@@ -501,7 +500,7 @@ namespace Icy
 
       menu_render_ui();
 
-      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(blit_pixel_t));
    }
 
    const GameManager::Level& GameManager::get_selected_level() const
@@ -509,7 +508,7 @@ namespace Icy
       return chapters.at(chap_select).level(level_select);
    }
 
-   void GameManager::start_slide(Pos dir, unsigned cnt)
+   void GameManager::start_slide(blit_pos_t dir, unsigned cnt)
    {
       m_game_state = State::MenuSlide;
 
@@ -600,7 +599,7 @@ namespace Icy
       else if (pressed_menu && game)
          m_game_state = State::Game;
 
-      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(blit_pixel_t));
    }
 
    void GameManager::step_game()
@@ -675,7 +674,7 @@ namespace Icy
       blit_font_cluster_render(font, &ui_target,
             "You completed all levels!\nAwesome! :D\nThanks for playing Dinothawr!",
             160, 155, BLIT_FONT_CENTERED, 2);
-      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
+      m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(blit_pixel_t));
    }
 
    void GameManager::iterate()
@@ -728,31 +727,31 @@ namespace Icy
       int preview_width  = Game::fb_width / scale_factor;
       int preview_height = Game::fb_height / scale_factor;
 
-      vector<Pixel> data(preview_width * preview_height);
-      Pixel *owned;
+      vector<blit_pixel_t> data(preview_width * preview_height);
+      blit_pixel_t *owned;
 
       /* The downscale needs the destination and its pitch, so it goes
        * through the context pointer rather than a capture. */
-      struct preview_ctx { vector<Pixel> *data; int width; };
+      struct preview_ctx { vector<blit_pixel_t> *data; int width; };
       preview_ctx ctx = { &data, preview_width };
 
       game.input_cb([](void*, Input) { return false; });
       game.video_cb([](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
          preview_ctx *c = static_cast<preview_ctx*>(ctxv);
-         vector<Pixel>& data = *c->data;
+         vector<blit_pixel_t>& data = *c->data;
          int preview_width = c->width;
-         const Pixel* pix = reinterpret_cast<const Pixel*>(pix_data);
-         pitch /= sizeof(Pixel);
+         const blit_pixel_t* pix = reinterpret_cast<const blit_pixel_t*>(pix_data);
+         pitch /= sizeof(blit_pixel_t);
 
          for (unsigned y = 0; y < height; y += scale_factor)
          {
             for (unsigned x = 0; x < width; x += scale_factor)
             {
-               Pixel a0 = pix[pitch * (y + 0) + (x + 0)];
-               Pixel a1 = pix[pitch * (y + 0) + (x + 1)];
-               Pixel b0 = pix[pitch * (y + 1) + (x + 0)];
-               Pixel b1 = pix[pitch * (y + 1) + (x + 1)];
-               Pixel res = blit_pixel_blend(blit_pixel_blend(a0, a1),
+               blit_pixel_t a0 = pix[pitch * (y + 0) + (x + 0)];
+               blit_pixel_t a1 = pix[pitch * (y + 0) + (x + 1)];
+               blit_pixel_t b0 = pix[pitch * (y + 1) + (x + 0)];
+               blit_pixel_t b1 = pix[pitch * (y + 1) + (x + 1)];
+               blit_pixel_t res = blit_pixel_blend(blit_pixel_blend(a0, a1),
                      blit_pixel_blend(b0, b1));
 
                data[preview_width * (y / scale_factor) + (x / scale_factor)] = res | BLIT_PIXEL_ALPHA_MASK;
@@ -766,10 +765,10 @@ namespace Icy
          /* Surface takes its own reference; drop the one we made. */
          blit_surface_data_t *pdata;
 
-         owned = (Pixel*)malloc(data.size() * sizeof(Pixel));
+         owned = (blit_pixel_t*)malloc(data.size() * sizeof(blit_pixel_t));
          if (!owned)
             throw std::bad_alloc();
-         memcpy(owned, &data[0], data.size() * sizeof(Pixel));
+         memcpy(owned, &data[0], data.size() * sizeof(blit_pixel_t));
 
          pdata = blit_surface_data_new(owned, preview_width,
                preview_height);

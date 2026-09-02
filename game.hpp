@@ -1,7 +1,8 @@
 #ifndef GAME_HPP__
 #define GAME_HPP__
 
-#include "blit.hpp"
+#include "blit_pixel.h"
+#include "blit_geom.h"
 #include "blit_surface_cache.h"
 
 #include <vector>
@@ -126,7 +127,7 @@ namespace Icy
          blit_tilemap_t *map;
          blit_render_target_t target;
          blit_surface_t player;
-         Blit::Pos player_off;
+         blit_pos_t player_off;
          blit_font_cluster_t *font;
          const blit_surface_t *bg;
          Input facing;
@@ -156,10 +157,10 @@ namespace Icy
          enum class Stepper { None, Tile, WinAnimation };
          Stepper   stepper;
          blit_surface_t *stepper_surf;
-         Blit::Pos       stepper_dir;
+         blit_pos_t       stepper_dir;
 
          void run_stepper();
-         void begin_tile_stepper(blit_surface_t& surf, Blit::Pos dir);
+         void begin_tile_stepper(blit_surface_t& surf, blit_pos_t dir);
 
          unsigned frame_cnt;
          bool player_walking;
@@ -180,9 +181,9 @@ namespace Icy
          void update_triggers();
          void move_if_no_collision(Input input);
          void push_block();
-         bool is_offset_collision(blit_surface_t& surf, Blit::Pos offset);
+         bool is_offset_collision(blit_surface_t& surf, blit_pos_t offset);
 
-         bool tile_stepper(blit_surface_t& surf, Blit::Pos step_dir);
+         bool tile_stepper(blit_surface_t& surf, blit_pos_t step_dir);
          bool win_animation_stepper();
 
          unsigned best_pushes;
@@ -281,8 +282,8 @@ namespace Icy
 
                ~Level() { blit_surface_release(&preview); }
 
-               Blit::Pos pos() const { return position; }
-               void pos(Blit::Pos p) { position = p; }
+               blit_pos_t pos() const { return position; }
+               void pos(blit_pos_t p) { position = p; }
 
                Level(const std::string& path, const blit_surface_t& bg);
                const std::string& path() const { return m_path; }
@@ -299,7 +300,7 @@ namespace Icy
                unsigned get_best_pushes() const { return best_pushes; }
 
             private:
-               Blit::Pos position;
+               blit_pos_t position;
                std::string m_path;
                std::string m_name;
                blit_surface_t preview;
@@ -423,7 +424,7 @@ namespace Icy
          bool find_next_unsolved_level(unsigned& chap, unsigned& level);
          void step_menu();
          void step_menu_slide();
-         void start_slide(Blit::Pos dir, unsigned cnt);
+         void start_slide(blit_pos_t dir, unsigned cnt);
          void menu_render_ui();
 
          int chap_select;
@@ -436,7 +437,7 @@ namespace Icy
           * being cleared with the rest. */
          icy_edge_t edges;
 
-         Blit::Pos menu_slide_dir;
+         blit_pos_t menu_slide_dir;
 
          icy_menu_slide_t slide;
 

@@ -9,7 +9,6 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace Blit;
 using namespace std;
 
 namespace Icy
@@ -189,7 +188,7 @@ namespace Icy
       }
 
       if (m_video_cb)
-         m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(Pixel));
+         m_video_cb(m_video_ctx, target.buffer, target.rect.w, target.rect.h, target.rect.w * sizeof(blit_pixel_t));
    }
 
    /* A plain scan rather than copy_if over a reference_wrapper vector:
@@ -266,8 +265,8 @@ namespace Icy
             goal_floor);
       size_t block_count  = get_tiles_with_attr("blocks", "goal", "true",
             goal_blocks);
-      Blit::Pos goals[max_tagged_tiles];
-      Blit::Pos blocks[max_tagged_tiles];
+      blit_pos_t goals[max_tagged_tiles];
+      blit_pos_t blocks[max_tagged_tiles];
       size_t i;
 
       if (floor_count != block_count)
@@ -355,7 +354,7 @@ namespace Icy
    /* The check itself is grid arithmetic and lives in icy_collide.c;
     * what stays here is the assertion, because only the game knows that
     * an off-grid surface means a broken level rather than a bad call. */
-   bool Game::is_offset_collision(blit_surface_t& surf, Pos offset)
+   bool Game::is_offset_collision(blit_surface_t& surf, blit_pos_t offset)
    {
       if (!icy_collide_aligned(map, surf.rect))
          throw logic_error("Offset collision check was performed outside tile grid.");
@@ -365,8 +364,8 @@ namespace Icy
 
    void Game::push_block()
    {
-      Blit::Pos offset = icy_input_offset((enum icy_input)facing);
-      Blit::Pos dir    = blit_pos_mul(offset,
+      blit_pos_t offset = icy_input_offset((enum icy_input)facing);
+      blit_pos_t dir    = blit_pos_mul(offset,
             blit_pos(blit_tilemap_tile_width(map),
                blit_tilemap_tile_height(map)));
       blit_surface_t *tile  = blit_tilemap_find_tile(map, "blocks",
@@ -377,7 +376,7 @@ namespace Icy
 
       int tile_x = player.rect.pos.x / blit_tilemap_tile_width(map);
       int tile_y = player.rect.pos.y / blit_tilemap_tile_height(map);
-      Pos tile_pos = blit_pos(tile_x, tile_y);
+      blit_pos_t tile_pos = blit_pos(tile_x, tile_y);
 
       if (!blit_tilemap_collision(map,
                blit_pos_add(tile_pos, blit_pos_scale(2, offset))))
@@ -397,7 +396,7 @@ namespace Icy
       facing = input;
       set_player_alt(icy_input_face((enum icy_input)facing));
 
-      Blit::Pos offset = icy_input_offset((enum icy_input)input);
+      blit_pos_t offset = icy_input_offset((enum icy_input)input);
       if (!is_offset_collision(player, offset))
       {
          begin_tile_stepper(player, offset);
@@ -415,7 +414,7 @@ namespace Icy
       icy_leg_begin(&leg, frames_to_ticks(tile_size / 2));
    }
 
-   bool Game::tile_stepper(blit_surface_t& surf, Pos step_dir)
+   bool Game::tile_stepper(blit_surface_t& surf, blit_pos_t step_dir)
    {
       int tile_size = step_dir.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map);
 
@@ -454,7 +453,7 @@ namespace Icy
       return slippery;
    }
 
-   void Game::begin_tile_stepper(blit_surface_t& surf, Pos dir)
+   void Game::begin_tile_stepper(blit_surface_t& surf, blit_pos_t dir)
    {
       stepper      = Stepper::Tile;
       stepper_surf = &surf;
