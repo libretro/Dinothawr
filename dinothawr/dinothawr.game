@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <game>
-   <title source="assets/titlescreen.png"/>
-   <menu_bg source="assets/level_select_bg.png"/>
-   <game_bg source="assets/bg.png"/>
-   <end_bg source="assets/ending.png"/>
+   <title source="assets/bg.apng" frame="3"/>
+   <menu_bg source="assets/bg.apng" frame="2"/>
+   <game_bg source="assets/bg.apng" frame="0"/>
+   <end_bg source="assets/bg.apng" frame="1"/>
    <font source="dino.font"/>
    <level_complete source="assets/finished.png"/>
    <lock_sprite source="assets/lock.png"/>

@@ -126,7 +126,7 @@ static void manager_init_bg(icy_manager_t *m, rxml_node_t *game_node);
 static void manager_init_sfx(icy_manager_t *m, rxml_node_t *game_node);
 static void manager_load_chapter(icy_manager_t *m, rxml_node_t *chap,
       int chapter);
-static void manager_init_menu(icy_manager_t *m, const char *level);
+static void manager_init_menu(icy_manager_t *m, rxml_node_t *game_node);
 static void manager_reset_level(icy_manager_t *m);
 static void manager_change_level(icy_manager_t *m, unsigned chapter,
       unsigned level);
@@ -266,8 +266,7 @@ static int manager_load(icy_manager_t *m, const char *path_game)
 
       if (!m->m_failed)
       {
-         manager_init_menu(m, blit_xml_attr(blit_xml_child(game_node, "title"),
-                  "source"));
+         manager_init_menu(m, game_node);
          manager_init_menu_sprite(m, game_node);
          manager_init_sfx(m, game_node);
          manager_init_bg(m, game_node);
@@ -341,19 +340,42 @@ static void manager_init_menu_surfaces(icy_manager_t *m)
 
 
 
+   /* An <element source= frame=> names either a whole image or one frame
+    * of an APNG, the same way a sprite's <face> does. An empty frame
+    * attribute means the whole file. */
+   static blit_surface_t cache_element(icy_manager_t *m,
+         rxml_node_t *game_node, const char *name)
+   {
+      rxml_node_t    *node  = blit_xml_child(game_node, name);
+      const char     *frame = blit_xml_attr(node, "frame");
+      const char     *path  = asset(m->dir, blit_xml_attr(node, "source"));
+      blit_surface_t  out;
+
+      if (*frame)
+      {
+         if (!blit_surface_cache_animation(blit_surface_cache(), path,
+                  (unsigned)blit_xml_attr_int(node, "frame"), &out))
+            blit_surface_init(&out);
+      }
+      else
+         out = cache_image(path);
+
+      return out;
+   }
+
 static void manager_init_menu_sprite(icy_manager_t *m, rxml_node_t *game_node)
    {
       int complete_y;
       int complete_x;
       int arrow_x;
       {
-         blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
+         blit_surface_t tmp = cache_element(m, game_node, "level_complete");
          blit_surface_assign(&m->level_complete, &tmp);
          blit_surface_release(&tmp);
       }
 
       {
-         blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
+         blit_surface_t tmp = cache_element(m, game_node, "lock_sprite");
          blit_surface_assign(&m->lock_sprite, &tmp);
          blit_surface_release(&tmp);
       }
@@ -367,21 +389,21 @@ static void manager_init_menu_sprite(icy_manager_t *m, rxml_node_t *game_node)
       m->level_complete.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
+         blit_surface_t tmp = cache_element(m, game_node, "menu_bg");
          blit_surface_assign(&m->level_select_bg, &tmp);
          blit_surface_release(&tmp);
       }
       m->level_select_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
+         blit_surface_t tmp = cache_element(m, game_node, "end_bg");
          blit_surface_assign(&m->end_credit_bg, &tmp);
          blit_surface_release(&tmp);
       }
       m->end_credit_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = cache_image(asset(m->dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
+         blit_surface_t tmp = cache_element(m, game_node, "game_bg");
          blit_surface_assign(&m->game_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -500,9 +522,9 @@ static void manager_load_chapter(icy_manager_t *m, rxml_node_t *chap, int chapte
    }
 
 
-static void manager_init_menu(icy_manager_t *m, const char *level)
+static void manager_init_menu(icy_manager_t *m, rxml_node_t *game_node)
    {
-      blit_surface_t surf = cache_image(asset(m->dir, level));
+      blit_surface_t surf = cache_element(m, game_node, "title");
 
       blit_render_target_release(&m->target);
       if (!blit_render_target_init_size(&m->target, ICY_GAME_FB_WIDTH,

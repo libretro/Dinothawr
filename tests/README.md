@@ -55,6 +55,18 @@ Run both. The default covers gameplay, `INPUT=menu` covers the front
 end, and combined with `SRAM_LOAD` it covers the front end with levels
 already cleared, which is a third set of states again.
 
+## The background APNG
+
+`tests/make-bg-apng.py` packs the four full-screen backgrounds into
+`dinothawr/assets/bg.apng`, which the .game file refers to by frame.
+Rerun it if any of them changes; it checks its own output is pixel-exact
+before writing.
+
+The four are all 320x200, none uses alpha, and they use 74 colours
+between them - so one indexed frame format holds all four exactly. That
+matters: converting them to RGBA instead, which is what most tools do by
+default, produces a file nearly twice the size of the PNGs it replaces.
+
 ## Running everything
 
 `tests/run.sh` runs every oracle below against the assets in this
