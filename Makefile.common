@@ -3,11 +3,9 @@ INCFLAGS := -I$(LIBRETRO_COMM_DIR)/include
 
 SOURCES_ASM := 
 
-SOURCES_CXX := $(CORE_DIR)/bg_manager.cpp \
-	$(CORE_DIR)/game.cpp \
+SOURCES_CXX := 	$(CORE_DIR)/game.cpp \
 	$(CORE_DIR)/game_manager.cpp \
 	$(CORE_DIR)/libretro.cpp \
-	$(CORE_DIR)/sfx_manager.cpp \
 
 SOURCES_C :=
 
@@ -29,6 +27,7 @@ SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_i16.c
 SOURCES_C += $(CORE_DIR)/audio/async_job.c
+SOURCES_C += $(CORE_DIR)/audio/game_audio.c
 
 ifeq ($(STATIC_LINKING), 1)
 else

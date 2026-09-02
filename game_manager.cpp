@@ -182,9 +182,10 @@ namespace Icy
 
    void GameManager::init_bg(rxml_node_t *game_node)
    {
-      rxml_node_t             *music = blit_xml_child(game_node, "music");
-      rxml_node_t             *node;
-      vector<BGManager::Track> tracks;
+      rxml_node_t         *music = blit_xml_child(game_node, "music");
+      rxml_node_t         *node;
+      vector<std::string>  paths;
+      vector<float>        gains;
 
       /* One walk over the <bg> elements rather than two: the source and
        * the volume come off the same node. */
@@ -194,11 +195,21 @@ namespace Icy
          const char *source = blit_xml_attr(node, "source");
          const char *volume = blit_xml_attr(node, "volume");
 
-         tracks.push_back({Utils::join(dir, "/", source),
-               *volume ? (float)std::strtod(volume, NULL) : 1.0f});
+         paths.push_back(Utils::join(dir, "/", source));
+         gains.push_back(*volume ? (float)std::strtod(volume, NULL) : 1.0f);
       }
 
-      get_bg().init(tracks);
+      {
+         vector<const char*> raw;
+         size_t i;
+
+         for (i = 0; i < paths.size(); i++)
+            raw.push_back(paths[i].c_str());
+
+         if (!icy_bgm_set_tracks(icy_bgm(), raw.empty() ? NULL : &raw[0],
+                  gains.empty() ? NULL : &gains[0], raw.size()))
+            throw std::bad_alloc();
+      }
    }
 
    void GameManager::init_sfx(rxml_node_t *game_node)
@@ -208,8 +219,11 @@ namespace Icy
 
       for (node = blit_xml_child(sfx, "sound"); node;
             node = blit_xml_next(node, "sound"))
-         get_sfx().add_stream(blit_xml_attr(node, "name"),
-               Utils::join(dir, "/", blit_xml_attr(node, "source")));
+         if (!icy_sfx_add(icy_sfx(), blit_xml_attr(node, "name"),
+                  Utils::join(dir, "/",
+                     blit_xml_attr(node, "source")).c_str()))
+            throw runtime_error(Utils::join("Failed to load sound: ",
+                     blit_xml_attr(node, "source")));
    }
 
    GameManager::Chapter GameManager::load_chapter(rxml_node_t *chap, int chapter)
@@ -428,7 +442,7 @@ namespace Icy
 
       menu_slide_dir = dir;
 
-      get_sfx().play_sfx("level_next", 0.5);
+      icy_sfx_play(icy_sfx(), "level_next", 0.5f);
    }
 
    void GameManager::step_menu()
@@ -483,7 +497,7 @@ namespace Icy
                level_select = 0;
             }
             else
-               get_sfx().play_sfx("chapter_locked", 0.5);
+               icy_sfx_play(icy_sfx(), "chapter_locked", 0.5f);
          }
       }
       else if (pressed_menu_up && !old_pressed_menu_up && chap_select > 0)
@@ -503,7 +517,7 @@ namespace Icy
             level_select = new_level;
          }
          else
-            get_sfx().play_sfx("chapter_locked", 0.5);
+            icy_sfx_play(icy_sfx(), "chapter_locked", 0.5f);
       }
       else if (pressed_menu_ok && !old_pressed_menu_ok)
          init_level(chap_select, level_select);

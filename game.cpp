@@ -200,7 +200,7 @@ namespace Icy
          set_player_alt(state);
 
          if (jump && !last_jump)
-            get_sfx().play_sfx("dino_jump", 0.4);
+            icy_sfx_play(icy_sfx(), "dino_jump", 0.4f);
       }
       else if (won_frame_cnt >= 2 * frame_per_iter)
          state = "defrost2";
@@ -228,7 +228,7 @@ namespace Icy
       push.set(true); // Avoid exiting win animation early.
       m_won_early = false;
       stepper = bind(&Game::win_animation_stepper, this);
-      get_sfx().play_sfx("frozen_dino_melt", 0.25);
+      icy_sfx_play(icy_sfx(), "frozen_dino_melt", 0.25f);
    }
 
    bool Game::won() const
@@ -423,7 +423,7 @@ namespace Icy
          stepper_cnt = 0;
          player_walking = false;
          set_player_alt_index(0);
-         get_sfx().play_sfx("dino_push", 1.0);
+         icy_sfx_play(icy_sfx(), "dino_push", 1.0f);
          pushes++;
       }
    }
@@ -493,7 +493,7 @@ namespace Icy
          is_sliding = false;
 
          if (&surf != &player)
-            get_sfx().play_sfx("ice_bump", 0.25);
+            icy_sfx_play(icy_sfx(), "ice_bump", 0.25f);
 
          return false;
       }

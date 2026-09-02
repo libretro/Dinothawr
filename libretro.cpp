@@ -33,8 +33,6 @@ static bool s_audio_float = false;
 /* No lock hooks: audio is rendered from retro_run on the same thread
  * that mutates the mixer, and the audio decode jobs never reach into it.
  */
-static SFXManager sfx;
-static BGManager bg_music;
 
 retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
@@ -59,8 +57,6 @@ namespace Icy
    mixer_i16_t* get_mixer_i16() { return mixer_i16; }
    bool audio_is_float() { return s_audio_float; }
    const string& get_basedir() { return game_path_dir; }
-   SFXManager& get_sfx() { return sfx; }
-   BGManager& get_bg() { return bg_music; }
 
    unsigned frames_to_ticks(unsigned frames60)
    {
@@ -94,6 +90,13 @@ static void check_system_specs(void)
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 }
 
+/* The C audio managers reach the mixers through these. */
+extern "C" {
+   int icy_audio_is_float(void) { return Icy::audio_is_float() ? 1 : 0; }
+   mixer_f32_t *icy_mixer_f32(void) { return Icy::get_mixer_f32(); }
+   mixer_i16_t *icy_mixer_i16(void) { return Icy::get_mixer_i16(); }
+}
+
 void retro_init(void)
 {
    struct retro_log_callback log;
@@ -108,6 +111,7 @@ void retro_deinit(void)
 {
    /* The surface cache holds every decoded image for the session. */
    blit_surface_cache_free();
+   icy_game_audio_free();
 }
 
 unsigned retro_api_version(void)
@@ -320,7 +324,7 @@ void retro_run(void)
     * emulation speed, so fast-forward never sped up sound. */
    game->iterate();
 
-   get_bg().step();
+   icy_bgm_step(icy_bgm());
    audio_callback();
 
    if (game->done())
@@ -501,7 +505,7 @@ void retro_unload_game(void)
    /* Before the mixer goes away: the music slot points into it, and a
     * decode may still be in flight holding a buffer nothing else can
     * reach. */
-   get_bg().deinit();
+   icy_bgm_stop(icy_bgm());
 
    if (mixer_f32)
    {

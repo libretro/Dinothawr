@@ -10,7 +10,7 @@
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
 #include "audio/mixer_i16.h"
-#include "audio/async_job.h"
+#include "audio/game_audio.h"
 
 #include <string>
 #include <functional>
@@ -68,88 +68,6 @@ namespace Icy
       Reset,
       None
    };
-
-   class SFXManager
-   {
-#ifndef USE_CXX03
-      public:
-         SFXManager() = default;
-         ~SFXManager();
-         /* Owns raw-pointer int16 buffers (released in the destructor), so
-          * copying would double-unref. It is a singleton; forbid copies. */
-         SFXManager(const SFXManager&) = delete;
-         SFXManager& operator=(const SFXManager&) = delete;
-         void add_stream(const std::string &ident, const std::string &path);
-         void play_sfx(const std::string &ident, float volume = 1.0f) const;
-
-      private:
-         /* Decoded WAV kept as reference-counted PCM in whichever sample
-          * type the live mixer wants, played as pcm streams into it. */
-         std::map<std::string, f32_buf_t*> effects_f32;
-         std::map<std::string, i16_buf_t*> effects_i16;
-#else
-      public:
-         void add_stream(const std::string &ident, const std::string &path) {}
-         void play_sfx(const std::string &ident, float volume = 1.0f) const {}
-#endif
-   };
-
-   SFXManager& get_sfx();
-
-   class BGManager
-   {
-#ifndef USE_CXX03
-      public:
-         struct Track
-         {
-            std::string path;
-            float gain;
-         };
-
-         BGManager() : first(true), last(0), rng_state(0), job(NULL) {}
-
-         void init(const std::vector<Track>& tracks);
-
-         /* Releases everything the int16 path is holding, including a
-          * decode still in flight. Call before the mixer it feeds goes
-          * away. */
-         void deinit();
-         void step();
-
-      private:
-         std::vector<Track> tracks;
-         bool first;
-         unsigned last;
-
-         /* Private shuffle state.  This used to be srand()/rand(): a core
-          * reseeding the global C PRNG walks over whatever the frontend
-          * or another statically linked core had set up, and gets walked
-          * over in turn.  time(NULL) also has one-second resolution, so
-          * two cores starting in the same second shuffled identically. */
-         uint32_t rng_state;
-         unsigned rng_next(unsigned n);
-
-         /* The next track is decoded off-thread so a track change does
-          * not stall the game. The job outlives step(), and job_path is
-          * the string it reads on its own thread, so both live here
-          * rather than on the stack. */
-         async_job_t *job;
-         std::string job_path;
-
-         unsigned next_index();
-#else
-      public:
-         struct Track
-         {
-            std::string path;
-            float gain;
-         };
-         void init(const std::vector<Track>& tracks) {}
-         void step() {}
-#endif
-   };
-
-   BGManager& get_bg();
 
    class CameraManager
    {
