@@ -99,7 +99,7 @@ namespace Blit
       if (!width || !height || !glyphwidth || !glyphheight)
          throw logic_error("Invalid glpyh arguments.");
 
-      blit_surface_t surf = Blit::surface_cache().from_image(
+      blit_surface_t surf = Blit::cache_image(
             Utils::join(dir, "/", source));
 
       if (surf.rect.w != width * glyphwidth || surf.rect.h != height * glyphheight)

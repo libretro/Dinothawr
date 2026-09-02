@@ -1,7 +1,7 @@
 #ifndef FONT_HPP__
 #define FONT_HPP__
 
-#include "surface_cache.hpp"
+#include "surface_cluster.hpp"
 #include <map>
 
 namespace Blit

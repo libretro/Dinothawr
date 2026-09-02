@@ -1,5 +1,5 @@
-#ifndef SURFACE_CACHE_HPP__
-#define SURFACE_CACHE_HPP__
+#ifndef SURFACE_CLUSTER_HPP__
+#define SURFACE_CLUSTER_HPP__
 
 #include "blit.hpp"
 #include "blit_surface_data.h"
@@ -8,9 +8,10 @@
 #include "blit_surface.h"
 #include "blit_render_target.h"
 #include "blit_surface_cluster.h"
-#include "blit_str_map.h"
+#include "blit_surface_cache.h"
 
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -101,60 +102,38 @@ namespace Blit
          blit_surface_cluster_t c;
    };
 
-   class SurfaceCache
+   /* Thin wrappers over blit_surface_cache.h: the C side reports
+    * failure by return value, and these raise it, since every caller
+    * here treats a missing asset as fatal. Each hands back a surface the
+    * caller owns and must release. */
+   inline blit_surface_t cache_image(const std::string& path)
    {
-      public:
-         SurfaceCache();
-         ~SurfaceCache();
+      blit_surface_t out;
+      if (!blit_surface_cache_image(blit_surface_cache(), path.c_str(), &out))
+         throw std::runtime_error(
+               blit_surface_cache_error(blit_surface_cache()));
+      return out;
+   }
 
-         /* Each hands back a surface the caller owns and must release. */
-         blit_surface_t from_image(const std::string& path);
-         blit_surface_t from_sprite(const std::string& path);
-         /* One frame of an APNG as a standalone surface; the whole
-          * animation is decoded and cached on the first request. */
-         blit_surface_t from_animation(const std::string& path, unsigned frame);
+   inline blit_surface_t cache_animation(const std::string& path,
+         unsigned frame)
+   {
+      blit_surface_t out;
+      if (!blit_surface_cache_animation(blit_surface_cache(), path.c_str(),
+               frame, &out))
+         throw std::runtime_error(
+               blit_surface_cache_error(blit_surface_cache()));
+      return out;
+   }
 
-      private:
-         /* Session-long, never evicted: one reference per entry, all
-          * released in the destructor. */
-         blit_str_map_t *cache;
-         /* from_sprite's XML parse, kept alongside the pixel cache: the
-          * faces it names were already shared, but the .sprite document
-          * behind them was re-read and re-parsed on every call - 50 times
-          * each for dino.sprite and frozen.sprite over a session. */
-         /* A parsed .sprite: its face table and the face it starts on.
-          * The cache owns one reference on the table and the string. */
-         struct SpriteDef
-         {
-            blit_alt_table_t *alts;
-            char             *start_id;
-         };
-         blit_str_map_t *sprites;
-         blit_surface_data_t *load_image(const std::string& path);
-         /* Face inside an APNG: decodes the whole animation on the first
-          * request for any of its frames and fills one cache entry per
-          * frame under "path#N" keys, so the file is read and decoded
-          * once however many faces reference it. */
-         blit_surface_data_t *load_apng_frame(
-               const std::string& path, unsigned frame);
-   };
-
-   /* One cache for the whole session.
-    *
-    * Every user of this used to hold its own: a local inside the tileset
-    * and glyph loaders (destroyed at the end of the function, so those
-    * cached nothing at all), and a member on each Game, which is
-    * constructed per level.  The tilesets and the dino sprites are shared
-    * across levels, so they were re-read and re-decoded once per level -
-    * about 2100 file opens over a session where 57 files exist.
-    *
-    * Sharing is safe because blit_surface_data_t is immutable once cached:
-    * Surface::pixel_raw is a const accessor, and refill_color swaps in
-    * a fresh Data rather than writing through the shared one.
-    * The only mutable pixel buffer is RenderTarget's, which is its own.
-    * All loading happens on the thread that calls retro_load_game and
-    * retro_run - the core's only worker threads decode audio. */
-   SurfaceCache& surface_cache();
+   inline blit_surface_t cache_sprite(const std::string& path)
+   {
+      blit_surface_t out;
+      if (!blit_surface_cache_sprite(blit_surface_cache(), path.c_str(), &out))
+         throw std::runtime_error(
+               blit_surface_cache_error(blit_surface_cache()));
+      return out;
+   }
 
 }
 

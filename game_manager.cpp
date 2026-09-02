@@ -109,7 +109,7 @@ namespace Icy
    void GameManager::init_menu_sprite(rxml_node_t *game_node)
    {
       {
-         blit_surface_t tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::cache_image(
                Utils::join(dir, "/",
                   blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
          blit_surface_assign(&level_complete, &tmp);
@@ -117,7 +117,7 @@ namespace Icy
       }
 
       {
-         blit_surface_t tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::cache_image(
                Utils::join(dir, "/",
                   blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
          blit_surface_assign(&lock_sprite, &tmp);
@@ -133,7 +133,7 @@ namespace Icy
       level_complete.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::cache_image(
                Utils::join(dir, "/",
                   blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
          blit_surface_assign(&level_select_bg, &tmp);
@@ -142,7 +142,7 @@ namespace Icy
       level_select_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::cache_image(
                Utils::join(dir, "/",
                   blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
          blit_surface_assign(&end_credit_bg, &tmp);
@@ -151,7 +151,7 @@ namespace Icy
       end_credit_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::surface_cache().from_image(
+         blit_surface_t tmp = Blit::cache_image(
                Utils::join(dir, "/",
                   blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
          blit_surface_assign(&game_bg, &tmp);
@@ -221,7 +221,7 @@ namespace Icy
 
    void GameManager::init_menu(const string& level)
    {
-      blit_surface_t surf = Blit::surface_cache().from_image(
+      blit_surface_t surf = Blit::cache_image(
             Utils::join(dir, "/", level));
 
       blit_render_target_release(&target);

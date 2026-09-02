@@ -105,7 +105,7 @@ namespace Blit
          for (; id_cnt < count; id_cnt++)
          {
             int id = first_gid + id_cnt;
-            blit_surface_t tile = surface_cache().from_animation(path, id_cnt);
+            blit_surface_t tile = cache_animation(path, id_cnt);
 
             if (tile.rect.w != tilewidth || tile.rect.h != tileheight)
                throw std::logic_error("Tilemap geometry does not correspond with image values.");
@@ -121,7 +121,7 @@ namespace Blit
       }
       else
       {
-         blit_surface_t surf = surface_cache().from_image(path);
+         blit_surface_t surf = cache_image(path);
 
          if (surf.rect.w != width || surf.rect.h != height)
             throw std::logic_error("Tilemap geometry does not correspond with image values.");
@@ -159,7 +159,7 @@ namespace Blit
 
          if (itr != attrs.end())
          {
-            blit_surface_t sprite_tile = surface_cache().from_sprite(
+            blit_surface_t sprite_tile = cache_sprite(
                   Utils::join(dir, "/", itr->second));
 
             if (!blit_tile_set_put(tiles, id, &sprite_tile))

@@ -1,4 +1,4 @@
-#include "surface_cache.hpp"
+#include "surface_cluster.hpp"
 #include <new>
 
 namespace Blit

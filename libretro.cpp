@@ -105,7 +105,10 @@ void retro_init(void)
 }
 
 void retro_deinit(void)
-{}
+{
+   /* The surface cache holds every decoded image for the session. */
+   blit_surface_cache_free();
+}
 
 unsigned retro_api_version(void)
 {

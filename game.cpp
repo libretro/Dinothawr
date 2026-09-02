@@ -86,8 +86,8 @@ namespace Icy
          /* The cache hands back a wrapper; take the raw surface out of
           * it and keep our own reference. */
          blit_surface_t sprite = sprite_path.empty()
-            ? Blit::surface_cache().from_sprite(Utils::join(level, ".sprite"))
-            : Blit::surface_cache().from_sprite(
+            ? Blit::cache_sprite(Utils::join(level, ".sprite"))
+            : Blit::cache_sprite(
                   Utils::join(Utils::basedir(level), "/", sprite_path));
 
          /* from_sprite hands over ownership. */

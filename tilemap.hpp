@@ -1,7 +1,7 @@
 #ifndef TILEMAP_HPP__
 #define TILEMAP_HPP__
 
-#include "surface_cache.hpp"
+#include "surface_cluster.hpp"
 #include "blit_tile_set.h"
 #include "xml.hpp"
 
