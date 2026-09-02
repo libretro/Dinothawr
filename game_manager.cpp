@@ -7,7 +7,6 @@
 #include <new>
 #include <cstring>
 #include <cstdlib>
-#include "xml.hpp"
 
 #include <iostream>
 #include <cstdlib>
@@ -18,6 +17,45 @@ using namespace std;
 
 namespace Icy
 {
+   /* Loads an image or dies: every caller here treats a missing asset
+    * as fatal, which is what the C entry point leaves to them. */
+   static blit_surface_t cache_image_or_throw(const char *path)
+   {
+      blit_surface_t out;
+
+      if (!blit_surface_cache_image(blit_surface_cache(), path, &out))
+         throw std::runtime_error(
+               blit_surface_cache_error(blit_surface_cache()));
+
+      return out;
+   }
+
+   /* Owns a parsed document for the length of a scope. One user, so it
+    * lives here rather than in a header: the lookups are blit_xml.h and
+    * this is only the lifetime, which the throwing loader below needs. */
+   class xml_doc
+   {
+      public:
+         xml_doc() : doc(NULL) {}
+         ~xml_doc() { if (doc) rxml_free_document(doc); }
+
+         xml_doc(const xml_doc&) = delete;
+         xml_doc& operator=(const xml_doc&) = delete;
+
+         bool load(const char *path)
+         {
+            if (doc)
+               rxml_free_document(doc);
+            doc = blit_xml_load(path);
+            return doc != NULL;
+         }
+
+         rxml_document_t *get() const { return doc; }
+
+      private:
+         rxml_document_t *doc;
+   };
+
    /* Small shims while GameManager still holds std::strings: the path
     * work itself is icy_path.c. */
    static std::string path_dir(const std::string& path)
@@ -161,15 +199,13 @@ namespace Icy
    void GameManager::init_menu_sprite(rxml_node_t *game_node)
    {
       {
-         blit_surface_t tmp = Blit::cache_image(
-               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
+         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")).c_str());
          blit_surface_assign(&level_complete, &tmp);
          blit_surface_release(&tmp);
       }
 
       {
-         blit_surface_t tmp = Blit::cache_image(
-               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
+         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")).c_str());
          blit_surface_assign(&lock_sprite, &tmp);
          blit_surface_release(&tmp);
       }
@@ -183,24 +219,21 @@ namespace Icy
       level_complete.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::cache_image(
-               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
+         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")).c_str());
          blit_surface_assign(&level_select_bg, &tmp);
          blit_surface_release(&tmp);
       }
       level_select_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::cache_image(
-               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
+         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")).c_str());
          blit_surface_assign(&end_credit_bg, &tmp);
          blit_surface_release(&tmp);
       }
       end_credit_bg.ignore_camera = 1;
 
       {
-         blit_surface_t tmp = Blit::cache_image(
-               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
+         blit_surface_t tmp = cache_image_or_throw(path_join(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")).c_str());
          blit_surface_assign(&game_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -284,8 +317,8 @@ namespace Icy
 
    void GameManager::init_menu(const string& level)
    {
-      blit_surface_t surf = Blit::cache_image(
-            path_join(dir, level.c_str()));
+      blit_surface_t surf = cache_image_or_throw(
+            path_join(dir, level.c_str()).c_str());
 
       blit_render_target_release(&target);
       if (!blit_render_target_init_size(&target, Game::fb_width,

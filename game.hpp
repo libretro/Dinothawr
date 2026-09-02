@@ -2,7 +2,7 @@
 #define GAME_HPP__
 
 #include "blit.hpp"
-#include "cache.hpp"
+#include "blit_surface_cache.h"
 
 #include <vector>
 #include "blit_tilemap.h"

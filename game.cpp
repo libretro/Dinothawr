@@ -123,9 +123,16 @@ namespace Icy
          else
             snprintf(path, sizeof(path), "%s.sprite", level);
 
-         /* cache_sprite hands over ownership. */
+         /* The cache hands over ownership. */
+         blit_surface_t sprite;
+
+         if (!blit_surface_cache_sprite(blit_surface_cache(), path,
+                  &sprite))
+            throw runtime_error(
+                  blit_surface_cache_error(blit_surface_cache()));
+
          blit_surface_release(&player);
-         player = Blit::cache_sprite(path);
+         player = sprite;
       }
 
       int x     = atoi(attr_or(layer->attr, "start_x", "1"));
