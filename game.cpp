@@ -27,26 +27,19 @@ namespace Icy
       return map;
    }
 
-   EdgeDetector::EdgeDetector(bool init) : pos(init)
-   {}
-
-   bool EdgeDetector::set(bool state)
-   {
-      bool ret = state && !pos;
-      pos = state;
-      return ret;
-   }
-
    Game::Game(const char *level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(font),
          won_frame_cnt(0), is_sliding(false), best_pushes(best_pushes), pushes(0),
-         chapter(chapter), level(level), push(true) 
+         chapter(chapter), level(level)
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
          throw std::bad_alloc();
       /* player is a raw surface: no constructor to zero it, and the
        * destructor below is what releases it. */
+      icy_edge_init(&push);
+      /* Entering with push held must not push on the first frame. */
+      icy_edge_suppress(&push, ICY_EDGE_OK);
       stepper      = Stepper::None;
       stepper_surf = NULL;
       stepper_dir  = blit_pos_zero();
@@ -60,10 +53,13 @@ namespace Icy
    Game::Game(const char *level_path)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(NULL),
-         won_frame_cnt(0), is_sliding(false), push(true)
+         won_frame_cnt(0), is_sliding(false)
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
          throw std::bad_alloc();
+      icy_edge_init(&push);
+      /* Entering with push held must not push on the first frame. */
+      icy_edge_suppress(&push, ICY_EDGE_OK);
       stepper      = Stepper::None;
       stepper_surf = NULL;
       stepper_dir  = blit_pos_zero();
@@ -168,27 +164,20 @@ namespace Icy
    /* A plain scan rather than copy_if over a reference_wrapper vector:
     * the elements are about to stop living in a std::vector, and this
     * form does not care what holds them. */
-   /* A thin wrapper while the callers are still C++: the search is
-    * icy_tiles.c, this only sizes the vector. */
-   vector<blit_cluster_elem_t*> Game::get_tiles_with_attr(const string& name,
-         const string& attr, const string& val)
+   size_t Game::get_tiles_with_attr(const char *name, const char *attr,
+         const char *val, blit_cluster_elem_t **out)
    {
-      size_t count = icy_tiles_with_attr(map, name.c_str(), attr.c_str(),
-            val.c_str(), NULL, 0);
-      vector<blit_cluster_elem_t*> surfs(count);
-
-      if (count)
-         icy_tiles_with_attr(map, name.c_str(), attr.c_str(), val.c_str(),
-               &surfs[0], count);
-
-      return surfs;
+      return icy_tiles_with_attr(map, name, attr, val, out,
+            max_tagged_tiles);
    }
 
    bool Game::win_animation_stepper()
    {
       won_frame_cnt++;
 
-      std::vector<blit_cluster_elem_t*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
+      blit_cluster_elem_t *goal_blocks[max_tagged_tiles];
+      size_t goal_block_count = get_tiles_with_attr("blocks", "goal",
+            "true", goal_blocks);
 
       const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
 
@@ -217,7 +206,7 @@ namespace Icy
             block->offset = player_off;
       }
 
-      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && push.set(m_input_cb(m_input_ctx, Input::Push));
+      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
       return true;
    }
 
@@ -226,7 +215,7 @@ namespace Icy
       won_frame_cnt = 1;
       player_walking = false;
 
-      push.set(true); // Avoid exiting win animation early.
+      icy_edge_suppress(&push, ICY_EDGE_OK); /* Don't exit the win animation early. */
       m_won_early = false;
       stepper = Stepper::WinAnimation;
       icy_sfx_play(icy_sfx(), "frozen_dino_melt", 0.25f);
@@ -240,25 +229,32 @@ namespace Icy
 
    bool Game::won_condition()
    {
-      std::vector<blit_cluster_elem_t*> goal_floor  = get_tiles_with_attr("floor", "goal", "true");
-      std::vector<blit_cluster_elem_t*> goal_blocks = get_tiles_with_attr("blocks", "goal", "true");
-      std::vector<Blit::Pos>            goals;
-      std::vector<Blit::Pos>            blocks;
+      blit_cluster_elem_t *goal_floor[max_tagged_tiles];
+      blit_cluster_elem_t *goal_blocks[max_tagged_tiles];
+      size_t floor_count  = get_tiles_with_attr("floor",  "goal", "true",
+            goal_floor);
+      size_t block_count  = get_tiles_with_attr("blocks", "goal", "true",
+            goal_blocks);
+      Blit::Pos goals[max_tagged_tiles];
+      Blit::Pos blocks[max_tagged_tiles];
       size_t i;
 
-      if (goal_floor.size() != goal_blocks.size())
+      if (floor_count != block_count)
          throw logic_error("Number of goal floors and goal blocks do not match.");
 
-      if (goal_floor.empty() || goal_blocks.empty())
+      if (!floor_count)
          throw logic_error("Goal floor or blocks are empty.");
 
-      for (i = 0; i < goal_floor.size(); i++)
+      if (floor_count > max_tagged_tiles)
+         throw logic_error("Level has more goal tiles than the game can track.");
+
+      for (i = 0; i < floor_count; i++)
       {
-         goals.push_back(goal_floor[i]->surf.rect.pos);
-         blocks.push_back(goal_blocks[i]->surf.rect.pos);
+         goals[i]  = goal_floor[i]->surf.rect.pos;
+         blocks[i] = goal_blocks[i]->surf.rect.pos;
       }
 
-      return icy_goal_all_covered(&goals[0], &blocks[0], goals.size()) != 0;
+      return icy_goal_all_covered(goals, blocks, floor_count) != 0;
    }
 
    void Game::update_player()
@@ -306,12 +302,12 @@ namespace Icy
 
    void Game::update_triggers()
    {
-      push.set(m_input_cb(m_input_ctx, Input::Push));
+      icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
    }
 
    void Game::update_input()
    {
-      bool push_trigger = push.set(m_input_cb(m_input_ctx, Input::Push));
+      bool push_trigger = icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
 
       if (push_trigger)
          push_block();

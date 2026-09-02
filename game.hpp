@@ -83,15 +83,6 @@ namespace Icy
    typedef void (*video_fn)(void *ctx, const void *data, unsigned width,
          unsigned height, std::size_t pitch);
 
-   class EdgeDetector
-   {
-      public:
-         EdgeDetector(bool init);
-         bool set(bool state);
-      private:
-         bool pos;
-   };
-
    class Game
    {
       public:
@@ -198,10 +189,15 @@ namespace Icy
          unsigned level;
 
 
-         std::vector<blit_cluster_elem_t*> get_tiles_with_attr(const std::string& layer,
-               const std::string& attr, const std::string& val = "");
+         /* Fills @out with the layer's tiles carrying @attr, and returns
+          * how many there were. Levels have a handful of goal squares,
+          * so the caller sizes a fixed array rather than allocating. */
+         enum { max_tagged_tiles = 64 };
+         size_t get_tiles_with_attr(const char *layer, const char *attr,
+               const char *val, blit_cluster_elem_t **out);
 
-         EdgeDetector push;
+         /* Push is read as an edge: holding it pushes once. */
+         icy_edge_t push;
    };
 
    class GameManager
