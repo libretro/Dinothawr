@@ -55,18 +55,33 @@ Run both. The default covers gameplay, `INPUT=menu` covers the front
 end, and combined with `SRAM_LOAD` it covers the front end with levels
 already cleared, which is a third set of states again.
 
-## What none of them reach
+## Solving a level
 
-No input here ever clears a level, so nothing runs the win check, the
-win animation, or the level-advance that follows. That is not a small
-corner: a bug sat in the win animation for two patches - it walked a
-fixed-size array to its end instead of to the number of entries filled,
-dereferencing uninitialised pointers - and every oracle in this
-directory passed the whole time.
+`INPUT=solve` plays level_1-1 to completion: face the block, push it
+twice to walk it across, go round behind it and push it onto the goal.
+It is the only script here that finishes a level, so it is the only one
+that reaches the win check, the win animation and the level advance
+behind them.
 
-Fixing this means an input script that solves a level. `level_1-1` has
-one block and one goal, so it is the one to write first. Until then,
-treat anything downstream of won_condition() as untested.
+```
+INPUT=solve tests/harness dinothawr_libretro.so <system-dir> 1500
+```
+
+The save hash changes to `248a4ef26ac68f44` when it works - a completed
+level is recorded - so that hash is the check, not the frame hash.
+
+This is worth having. A bug sat in the win animation for two patches:
+it walked a fixed-size array to its end rather than to the number of
+entries filled, dereferencing uninitialised pointers on every tick the
+animation ran. Every other oracle in this directory passed the whole
+time. Under `INPUT=solve` with the bug reintroduced, UBSan reports a
+null member access and ASan segfaults on the first frame of the
+animation.
+
+Timing matters: a move is ignored while the previous one is still in
+flight, so the script leaves 90 frames between presses. If the level or
+its timings change, retime it rather than assume it still solves - a
+script that stops solving silently goes back to covering nothing.
 
 ## The save
 

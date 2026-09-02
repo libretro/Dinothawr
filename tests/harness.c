@@ -127,6 +127,38 @@ static uint64_t g_video_hash = 1469598103934665603ULL;
 
 static int g_nohash;
 static int g_input_menu;
+static int g_input_solve;
+
+/* level_1-1: player starts at tile (3,4), the one block sits at (4,4)
+ * and the one goal square at (6,3). Walking into a block does not move
+ * it - a direction sets which way the dino faces, and Push shoves what
+ * it is facing, which then slides until it hits something.
+ *
+ * A push moves a block one tile. Face right and push twice, walking up
+ * behind it, to get the block from (4,4) to (6,4); then walk round to
+ * (6,5), face up and push, putting it on the goal at (6,3).
+ *
+ * This is the only script here that finishes a level, so it is the only
+ * one that reaches won_condition, the win animation and the level
+ * advance behind them. */
+static const unsigned char g_solve_moves[] =
+{
+   RETRO_DEVICE_ID_JOYPAD_RIGHT,  /* face the block at (4,4)  */
+   RETRO_DEVICE_ID_JOYPAD_B,      /* push it to (5,4)         */
+   RETRO_DEVICE_ID_JOYPAD_RIGHT,  /* walk to (4,4)            */
+   RETRO_DEVICE_ID_JOYPAD_B,      /* push it to (6,4)         */
+   RETRO_DEVICE_ID_JOYPAD_RIGHT,  /* walk to (5,4)            */
+   RETRO_DEVICE_ID_JOYPAD_DOWN,   /* (5,5)                    */
+   RETRO_DEVICE_ID_JOYPAD_RIGHT,  /* (6,5)                    */
+   RETRO_DEVICE_ID_JOYPAD_UP,     /* face the block at (6,4)  */
+   RETRO_DEVICE_ID_JOYPAD_B       /* push it to (6,3), goal   */
+};
+
+/* Long enough for a leg to finish and for the press to read as an edge:
+ * a leg is 8 frames at 60 Hz, and a slide is several. */
+#define SOLVE_STEP   90u
+#define SOLVE_HOLD   6u
+#define SOLVE_START  120u
 
 static void video_cb(const void *data, unsigned w, unsigned h, size_t pitch)
 {
@@ -185,6 +217,30 @@ static int16_t input_state_cb(unsigned port, unsigned device,
     * selection to one end and leaves it there - so the menu's own
     * transitions, its slide animation and its locked-chapter path were
     * never reached by a default run. */
+   if (g_input_solve)
+   {
+      unsigned n;
+
+      /* Title screen wants a press to reach the menu, and the menu
+       * another to enter the level the cursor starts on - chapter 0,
+       * level 0, which is level_1-1. Two taps before any moving. */
+      if (g_cur_frame < SOLVE_START)
+         return id == RETRO_DEVICE_ID_JOYPAD_B
+            && ((g_cur_frame >= 20 && g_cur_frame < 26)
+             || (g_cur_frame >= 70 && g_cur_frame < 76));
+
+      n = (g_cur_frame - SOLVE_START) / SOLVE_STEP;
+
+      if (n < sizeof(g_solve_moves) / sizeof(g_solve_moves[0]))
+      {
+         unsigned phase = (g_cur_frame - SOLVE_START) % SOLVE_STEP;
+         return phase < SOLVE_HOLD && id == g_solve_moves[n];
+      }
+
+      /* Level solved: sit still and let the win animation run. */
+      return 0;
+   }
+
    if (g_input_menu)
    {
       unsigned phase = g_cur_frame % 400;
@@ -273,7 +329,8 @@ int main(int argc, char **argv)
    g_nohash = getenv("NOHASH") != NULL;
    {
       const char *mode = getenv("INPUT");
-      g_input_menu = mode && strcmp(mode, "menu") == 0;
+      g_input_menu  = mode && strcmp(mode, "menu") == 0;
+      g_input_solve = mode && strcmp(mode, "solve") == 0;
    }
    g_sysdir = argv[2];
    g_frames = (unsigned)strtoul(argv[3], NULL, 10);
