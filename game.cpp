@@ -366,8 +366,11 @@ namespace Icy
    void Game::push_block()
    {
       Blit::Pos offset = icy_input_offset((enum icy_input)facing);
-      Blit::Pos dir    = offset * blit_pos(blit_tilemap_tile_width(map), blit_tilemap_tile_height(map));
-      blit_surface_t *tile  = blit_tilemap_find_tile(map, "blocks", player.rect.pos + dir);
+      Blit::Pos dir    = blit_pos_mul(offset,
+            blit_pos(blit_tilemap_tile_width(map),
+               blit_tilemap_tile_height(map)));
+      blit_surface_t *tile  = blit_tilemap_find_tile(map, "blocks",
+            blit_pos_add(player.rect.pos, dir));
 
       if (!tile)
          return;
@@ -376,7 +379,8 @@ namespace Icy
       int tile_y = player.rect.pos.y / blit_tilemap_tile_height(map);
       Pos tile_pos = blit_pos(tile_x, tile_y);
 
-      if (!blit_tilemap_collision(map, tile_pos + (2 * offset)))
+      if (!blit_tilemap_collision(map,
+               blit_pos_add(tile_pos, blit_pos_scale(2, offset))))
       {
          begin_tile_stepper(*tile, offset);
          begin_leg(offset.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map));
@@ -415,7 +419,8 @@ namespace Icy
    {
       int tile_size = step_dir.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map);
 
-      surf.rect += icy_leg_step(&leg, tile_size) * step_dir;
+      surf.rect = blit_rect_offset(surf.rect,
+            blit_pos_scale(icy_leg_step(&leg, tile_size), step_dir));
 
       if (!player_walking)
       {

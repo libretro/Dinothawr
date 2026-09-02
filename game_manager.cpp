@@ -464,7 +464,8 @@ namespace Icy
 
    void GameManager::step_menu_slide()
    {
-      ui_target.rect.pos += icy_menu_slide_step(&slide);
+      ui_target.rect.pos = blit_pos_add(ui_target.rect.pos,
+            icy_menu_slide_step(&slide));
 
       if (icy_menu_slide_done(&slide))
       {
@@ -495,7 +496,8 @@ namespace Icy
       /* cnt is the duration in 60 Hz frames; dir * cnt is the distance it
        * used to cover one tick at a time. Keep the distance, convert the
        * duration. */
-      icy_menu_slide_start(&slide, (int)cnt * dir, frames_to_ticks(cnt));
+      icy_menu_slide_start(&slide, blit_pos_scale((int)cnt, dir),
+            frames_to_ticks(cnt));
 
       menu_slide_dir = dir;
 
@@ -756,7 +758,10 @@ namespace Icy
          blit_surface_init_data(&preview, pdata);
          blit_surface_data_unref(pdata);
       }
-      pos(blit_pos(Game::fb_width, Game::fb_height) / scale_factor - blit_pos(5, 5));
+      pos(blit_pos_sub(
+               blit_pos_div(blit_pos(Game::fb_width, Game::fb_height),
+                  scale_factor),
+               blit_pos(5, 5)));
    }
 
    void GameManager::Level::render(blit_render_target_t& target) const
