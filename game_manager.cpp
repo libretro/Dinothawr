@@ -289,7 +289,7 @@ namespace Icy
    void GameManager::change_level(unsigned chapter, unsigned level) 
    {
       game = Utils::make_unique<Game>(
-            chapters.at(chapter).level(level).path(), 
+            chapters.at(chapter).level(level).path().c_str(), 
             chapter,
             level,
             chapters.at(chapter).level(level).get_best_pushes(),
@@ -643,7 +643,7 @@ namespace Icy
       /* preview is a raw surface: it has no constructor to zero it. */
       blit_surface_init(&preview);
 
-      Game game{path};
+      Game game{path.c_str()};
       game.set_bg(bg);
 
       static const unsigned scale_factor = 2;

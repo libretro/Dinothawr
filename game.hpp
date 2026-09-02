@@ -95,8 +95,8 @@ namespace Icy
    class Game
    {
       public:
-         Game(const std::string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t* font);
-         Game(const std::string& level_path);
+         Game(const char *level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t* font);
+         Game(const char *level_path);
 
          void input_cb(input_fn cb, void *ctx = NULL)
          { m_input_cb = cb; m_input_ctx = ctx; }
@@ -120,7 +120,7 @@ namespace Icy
          /* player is a raw surface, so face selection goes through the
           * C entry point; these keep the failure message the wrapper
           * used to raise. */
-         void set_player_alt(const std::string& id, unsigned index = 0);
+         void set_player_alt(const char *id, unsigned index = 0);
          void set_player_alt_index(unsigned index);
 
          void iterate();
@@ -179,7 +179,7 @@ namespace Icy
          icy_leg_t leg;
          void begin_leg(int tile_size);
 
-         void set_initial_pos(const std::string& level);
+         void set_initial_pos(const char *level);
          void update_player();
          void update_animation();
          void prepare_won_animation();

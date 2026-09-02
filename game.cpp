@@ -15,10 +15,10 @@ namespace Icy
 {
    /* Loads in the initialiser list: the map has to exist before
     * anything that reads its size. */
-   static blit_tilemap_t *load_map(const std::string& path)
+   static blit_tilemap_t *load_map(const char *path)
    {
       char            err[256];
-      blit_tilemap_t *map = blit_tilemap_load(path.c_str(), err,
+      blit_tilemap_t *map = blit_tilemap_load(path, err,
             sizeof(err));
 
       if (!map)
@@ -37,7 +37,7 @@ namespace Icy
       return ret;
    }
 
-   Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
+   Game::Game(const char *level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t *font)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(font),
          won_frame_cnt(0), is_sliding(false), best_pushes(best_pushes), pushes(0),
@@ -57,7 +57,7 @@ namespace Icy
       bg = NULL;
    }
 
-   Game::Game(const string& level_path)
+   Game::Game(const char *level_path)
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(NULL),
          won_frame_cnt(0), is_sliding(false), push(true)
@@ -81,9 +81,9 @@ namespace Icy
       blit_surface_release(&player);
    }
 
-   void Game::set_player_alt(const string& id, unsigned index)
+   void Game::set_player_alt(const char *id, unsigned index)
    {
-      if (!blit_surface_set_active_alt(&player, id.c_str(), index))
+      if (!blit_surface_set_active_alt(&player, id, index))
          throw logic_error(Utils::join("Player sprite has no face \"",
                   id, "\" at index ", index, "."));
    }
@@ -98,7 +98,7 @@ namespace Icy
       this->bg = &bg;
    }
 
-   void Game::set_initial_pos(const string& level)
+   void Game::set_initial_pos(const char *level)
    {
       blit_layer_t *layer = blit_tilemap_find_layer(map, "floor");
       if (!layer)
@@ -122,11 +122,11 @@ namespace Icy
       int y     = Utils::stoi(attr_or(layer->attr, "start_y", "1"));
       int off_x = Utils::stoi(attr_or(layer->attr, "player_offset_x", "0"));
       int off_y = Utils::stoi(attr_or(layer->attr, "player_offset_y", "0"));
-      std::basic_string<char> face = attr_or(layer->attr, "start_facing", "right");
+      const char *face = attr_or(layer->attr, "start_facing", "right");
 
       player.rect.pos = blit_pos(x * blit_tilemap_tile_width(map), y * blit_tilemap_tile_height(map));
       player_off = blit_pos(off_x, off_y);
-      facing = (Input)icy_input_from_face(face.c_str());
+      facing = (Input)icy_input_from_face(face);
       set_player_alt(face);
    }
 
@@ -192,7 +192,7 @@ namespace Icy
 
       const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
 
-      std::string state = "frozen";
+      const char *state = "frozen";
       if (won_frame_cnt >= 3 * frame_per_iter)
       {
          bool jump = ((won_frame_cnt / frame_per_iter - 3) >> 1) & 1;
@@ -210,7 +210,7 @@ namespace Icy
 
       for (auto& block : goal_blocks)
       {
-         blit_surface_set_active_alt(&block->surf, state.c_str(), 0);
+         blit_surface_set_active_alt(&block->surf, state, 0);
 
          // Shift defrosted block same way player sprite is (16x17, etc), but only when defrost kicks in.
          if (won_frame_cnt >= 1 * frame_per_iter)
