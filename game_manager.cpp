@@ -266,10 +266,15 @@ namespace Icy
 
    void GameManager::init_bg(rxml_node_t *game_node)
    {
-      rxml_node_t         *music = blit_xml_child(game_node, "music");
-      rxml_node_t         *node;
-      vector<std::string>  paths;
-      vector<float>        gains;
+      rxml_node_t *music = blit_xml_child(game_node, "music");
+      rxml_node_t *node;
+      /* A .game names a handful of tracks; this is well above any of
+       * them and keeps the collection allocation-free. */
+      enum { max_tracks = 32 };
+      char         paths[max_tracks][512];
+      const char  *path_ptrs[max_tracks];
+      float        gains[max_tracks];
+      size_t       count = 0;
 
       /* One walk over the <bg> elements rather than two: the source and
        * the volume come off the same node. */
@@ -279,21 +284,19 @@ namespace Icy
          const char *source = blit_xml_attr(node, "source");
          const char *volume = blit_xml_attr(node, "volume");
 
-         paths.push_back(asset(dir, source));
-         gains.push_back(*volume ? (float)std::strtod(volume, NULL) : 1.0f);
+         if (count == max_tracks)
+            break;
+
+         icy_path_join(paths[count], sizeof(paths[count]), dir, source);
+         path_ptrs[count] = paths[count];
+         gains[count]     = *volume ? (float)std::strtod(volume, NULL)
+            : 1.0f;
+         count++;
       }
 
-      {
-         vector<const char*> raw;
-         size_t i;
-
-         for (i = 0; i < paths.size(); i++)
-            raw.push_back(paths[i].c_str());
-
-         if (!icy_bgm_set_tracks(icy_bgm(), raw.empty() ? NULL : &raw[0],
-                  gains.empty() ? NULL : &gains[0], raw.size()))
-            throw std::bad_alloc();
-      }
+      if (!icy_bgm_set_tracks(icy_bgm(), count ? path_ptrs : NULL,
+               count ? gains : NULL, count))
+         throw std::bad_alloc();
    }
 
    void GameManager::init_sfx(rxml_node_t *game_node)
@@ -762,20 +765,26 @@ namespace Icy
       int preview_width  = ICY_GAME_FB_WIDTH / scale_factor;
       int preview_height = ICY_GAME_FB_HEIGHT / scale_factor;
 
-      vector<blit_pixel_t> data(preview_width * preview_height);
-      blit_pixel_t *owned;
+      /* The destination is the surface's own buffer, filled directly by
+       * the video callback - there is no reason for a vector and a copy
+       * out of it. */
+      blit_pixel_t *owned = (blit_pixel_t*)calloc(
+            (size_t)preview_width * preview_height, sizeof(*owned));
 
       /* The downscale needs the destination and its pitch, so it goes
        * through the context pointer rather than a capture. */
-      struct preview_ctx { vector<blit_pixel_t> *data; int width; };
-      preview_ctx ctx = { &data, preview_width };
+      struct preview_ctx { blit_pixel_t *data; int width; };
+      preview_ctx ctx = { owned, preview_width };
+
+      if (!owned)
+         throw std::bad_alloc();
 
       icy_game_set_input_cb(preview_game,
             [](void*, enum icy_input) { return 0; }, NULL);
       icy_game_set_video_cb(preview_game,
             [](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
-         preview_ctx *c = static_cast<preview_ctx*>(ctxv);
-         vector<blit_pixel_t>& data = *c->data;
+         preview_ctx  *c = static_cast<preview_ctx*>(ctxv);
+         blit_pixel_t *data = c->data;
          int preview_width = c->width;
          const blit_pixel_t* pix = reinterpret_cast<const blit_pixel_t*>(pix_data);
          pitch /= sizeof(blit_pixel_t);
@@ -798,26 +807,27 @@ namespace Icy
 
       if (!icy_game_iterate(preview_game))
       {
-         std::string why = icy_game_error(preview_game);
+         char why[256];
+
+         snprintf(why, sizeof(why), "%s", icy_game_error(preview_game));
          icy_game_free(preview_game);
+         free(owned);
          throw runtime_error(why);
       }
 
       icy_game_free(preview_game);
 
       {
-         /* Surface takes its own reference; drop the one we made. */
-         blit_surface_data_t *pdata;
+         /* The surface takes its own reference; drop the one made here. */
+         blit_surface_data_t *pdata = blit_surface_data_new(owned,
+               preview_width, preview_height);
 
-         owned = (blit_pixel_t*)malloc(data.size() * sizeof(blit_pixel_t));
-         if (!owned)
-            throw std::bad_alloc();
-         memcpy(owned, &data[0], data.size() * sizeof(blit_pixel_t));
-
-         pdata = blit_surface_data_new(owned, preview_width,
-               preview_height);
          if (!pdata)
+         {
+            free(owned);
             throw std::bad_alloc();
+         }
+
          blit_surface_init_data(&preview, pdata);
          blit_surface_data_unref(pdata);
       }
