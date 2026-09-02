@@ -516,7 +516,7 @@ namespace Icy
        * used to cover one tick at a time. Keep the distance, convert the
        * duration. */
       icy_menu_slide_start(&slide, blit_pos_scale((int)cnt, dir),
-            frames_to_ticks(cnt));
+            icy_frames_to_ticks(cnt));
 
       menu_slide_dir = dir;
 

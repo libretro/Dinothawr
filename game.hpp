@@ -10,6 +10,7 @@
 #include "blit_xml.h"
 #include "icy_menu_slide.h"
 #include "icy_edge.h"
+#include "icy_rate.h"
 #include "icy_input.h"
 #include "icy_leg.h"
 #include "icy_camera.h"
@@ -63,7 +64,6 @@ namespace Icy
     * frames of the original sim. Never less than 1, so a duration can't
     * collapse to nothing at low rates, and exactly @frames60 at 60 Hz,
     * which is what keeps the default rate bit-for-bit what it was. */
-   unsigned frames_to_ticks(unsigned frames60);
 
    /* The frontend's two hooks live in icy_input.h, so the C side of the
     * game can hold them. */
@@ -133,7 +133,7 @@ namespace Icy
          bool m_won_early;
          bool m_failed;
          char m_error[192];
-         /* Durations in 60 Hz frames; frames_to_ticks() turns them into
+         /* Durations in 60 Hz frames; icy_frames_to_ticks() turns them into
           * tick counts at the rate actually being run. */
          enum { won_frame_cnt_limit  = 60 * 5 };
          enum { won_frames_per_iter  = 24 };

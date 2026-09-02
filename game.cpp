@@ -232,7 +232,7 @@ namespace Icy
       size_t goal_block_count = get_tiles_with_attr("blocks", "goal",
             "true", goal_blocks);
 
-      const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
+      const unsigned frame_per_iter = icy_frames_to_ticks(won_frames_per_iter);
       size_t         i;
 
       const char *state = "frozen";
@@ -283,7 +283,7 @@ namespace Icy
    bool Game::won() const
    {
       return m_won_early
-         || (won_frame_cnt >= frames_to_ticks(won_frame_cnt_limit));
+         || (won_frame_cnt >= icy_frames_to_ticks(won_frame_cnt_limit));
    }
 
    bool Game::won_condition()
@@ -365,7 +365,7 @@ namespace Icy
        * spans what used to be 10 frames - the cycle changes at the same
        * wall-clock moments at 60 Hz and at 240. */
       set_player_alt_index(icy_anim_moving(frame_cnt,
-               frames_to_ticks(anim_frames_per_step), is_sliding));
+               icy_frames_to_ticks(anim_frames_per_step), is_sliding));
    }
 
    void Game::update_triggers()
@@ -454,7 +454,7 @@ namespace Icy
     * the grid exactly at the end of the leg whatever the rate. */
    void Game::begin_leg(int tile_size)
    {
-      icy_leg_begin(&leg, frames_to_ticks(tile_size / 2));
+      icy_leg_begin(&leg, icy_frames_to_ticks(tile_size / 2));
    }
 
    bool Game::tile_stepper(blit_surface_t& surf, blit_pos_t step_dir)
@@ -467,7 +467,7 @@ namespace Icy
       if (!player_walking)
       {
          set_player_alt_index(icy_anim_pushing(stepper_cnt,
-                  frames_to_ticks(push_anim_frames)));
+                  icy_frames_to_ticks(push_anim_frames)));
          stepper_cnt++;
       }
 

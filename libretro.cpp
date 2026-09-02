@@ -14,6 +14,7 @@
 
 #include "libretro_core_options.h"
 #include "icy_path.h"
+#include "icy_rate.h"
 
 using namespace Icy;
 using namespace std;
@@ -47,7 +48,7 @@ static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
 
 /* Rate the frontend drives retro_run at, and therefore the rate the
- * simulation is stepped at. See Icy::frames_to_ticks(). */
+ * simulation is stepped at. See icy_rate.h. */
 static double   g_framerate = 60.0;
 
 namespace Icy
@@ -57,18 +58,6 @@ namespace Icy
    bool audio_is_float() { return s_audio_float; }
    const string& get_basedir() { return game_path_dir; }
 
-   unsigned frames_to_ticks(unsigned frames60)
-   {
-      /* Rounded so a duration lands on the nearest whole tick rather
-       * than always short, and floored at one tick so nothing becomes
-       * instantaneous at low rates. At 60 Hz this is the identity, which
-       * is what keeps the default rate identical to the fixed-step sim
-       * this replaced. */
-      double ticks = frames60 * g_framerate / 60.0 + 0.5;
-      if (ticks < 1.0)
-         return 1;
-      return (unsigned)ticks;
-   }
 }
 
 #define AUDIO_SAMPLE_RATE 44100
@@ -280,6 +269,7 @@ static void apply_framerate(void)
       return;
 
    g_framerate  = fps;
+   icy_rate_set(fps);
    audio_frames = (unsigned)(AUDIO_SAMPLE_RATE / fps + 0.5);
    if (audio_frames < 1)
       audio_frames = 1;
