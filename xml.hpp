@@ -5,8 +5,7 @@
 #include <cstring>
 #include <string>
 
-#include <formats/rxml.h>
-#include <streams/file_stream.h>
+#include "blit_xml.h"
 
 /* A thin, pugixml-shaped view over libretro-common's rxml.
  *
@@ -26,13 +25,16 @@ namespace Blit
 {
    namespace Xml
    {
+      /* Thin C++ shims over blit_xml.h, kept while the call sites still
+       * read like pugixml. Each one is a forward; they go as the callers
+       * convert. */
       class Attribute
       {
          public:
             Attribute(const char *value) : v(value ? value : "") {}
 
             const char *value() const { return v; }
-            int as_int() const { return static_cast<int>(std::strtol(v, NULL, 0)); }
+            int as_int() const { return (int)std::strtol(v, NULL, 0); }
 
          private:
             const char *v;
@@ -51,39 +53,17 @@ namespace Blit
             const char *name() const { return (n && n->name) ? n->name : ""; }
             const char *data() const { return (n && n->data) ? n->data : ""; }
 
-            /* First child with this name, or an empty node. */
             Node child(const char *name) const
-            {
-               rxml_node_t *c;
-               if (!n)
-                  return Node();
-               for (c = n->children; c; c = c->next)
-                  if (c->name && std::strcmp(c->name, name) == 0)
-                     return Node(c);
-               return Node();
-            }
+            { return Node(blit_xml_child(n, name)); }
 
-            /* Next sibling with this name, or the immediate next one. */
             Node next_sibling(const char *name) const
-            {
-               rxml_node_t *c;
-               if (!n)
-                  return Node();
-               for (c = n->next; c; c = c->next)
-                  if (c->name && std::strcmp(c->name, name) == 0)
-                     return Node(c);
-               return Node();
-            }
+            { return Node(blit_xml_next(n, name)); }
 
             Node next_sibling() const
-            {
-               return Node(n ? n->next : NULL);
-            }
+            { return Node(blit_xml_next_any(n)); }
 
             Attribute attribute(const char *name) const
-            {
-               return Attribute(n ? rxml_node_attrib(n, name) : NULL);
-            }
+            { return Attribute(blit_xml_attr(n, name)); }
 
          private:
             rxml_node_t *n;
@@ -99,56 +79,20 @@ namespace Blit
             Document(const Document&) = delete;
             Document& operator=(const Document&) = delete;
 
-            /* rxml no longer reads files itself, so the read happens
-             * here - still through filestream, so it still goes through
-             * the frontend's VFS like every other read in the core.
-             *
-             * filestream_read_file() is one bulk read with the
-             * sequential hint, and its buffer already meets the
-             * ownership contract of rxml_load_document_owned() (heap,
-             * len + 1 bytes, NUL at [len]), so the document adopts it
-             * outright: no chunked reads, no second copy of the bytes.
-             * On failure - either the read or the parse - the buffer is
-             * already released (rxml frees it before returning NULL). */
             bool load_file(const char *path)
             {
-               void   *buf = NULL;
-               int64_t len = 0;
-
                if (doc)
                {
                   rxml_free_document(doc);
                   doc = NULL;
                }
 
-               if (!filestream_read_file(path, &buf, &len) || !buf)
-                  return false;
-
-               doc = rxml_load_document_owned(
-                     static_cast<char*>(buf), static_cast<size_t>(len));
-
-               /* A parse that produced no root element - an empty or
-                * all-prolog file - is a failed load as far as the
-                * callers are concerned: their next step is child() on
-                * the root, and "Failed to load X" beats the generic
-                * malformed-content error they would otherwise reach. */
-               if (doc && !rxml_root_node(doc))
-               {
-                  rxml_free_document(doc);
-                  doc = NULL;
-               }
+               doc = blit_xml_load(path);
                return doc != NULL;
             }
 
-            /* pugixml's document sits above the root element, so
-             * doc.child("map") means "the root, if it is called map". */
             Node child(const char *name) const
-            {
-               rxml_node_t *root = doc ? rxml_root_node(doc) : NULL;
-               if (root && root->name && std::strcmp(root->name, name) == 0)
-                  return Node(root);
-               return Node();
-            }
+            { return Node(blit_xml_root(doc, name)); }
 
          private:
             rxml_document_t *doc;
