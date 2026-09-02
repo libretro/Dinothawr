@@ -4,6 +4,8 @@
 #include "icy_goal.h"
 #include "icy_tiles.h"
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 #include "utils.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -80,8 +82,12 @@ namespace Icy
    void Game::set_player_alt(const char *id, unsigned index)
    {
       if (!blit_surface_set_active_alt(&player, id, index))
-         throw logic_error(Utils::join("Player sprite has no face \"",
-                  id, "\" at index ", index, "."));
+      {
+         char msg[256];
+         snprintf(msg, sizeof(msg),
+               "Player sprite has no face \"%s\" at index %u.", id, index);
+         throw logic_error(msg);
+      }
    }
 
    void Game::set_player_alt_index(unsigned index)
@@ -100,24 +106,33 @@ namespace Icy
       if (!layer)
          throw runtime_error("Floor layer not found.");
 
-      std::basic_string<char> sprite_path = attr_or(layer->attr, "player_sprite", "");
       {
-         /* The cache hands back a wrapper; take the raw surface out of
-          * it and keep our own reference. */
-         blit_surface_t sprite = sprite_path.empty()
-            ? Blit::cache_sprite(Utils::join(level, ".sprite"))
-            : Blit::cache_sprite(
-                  Utils::join(Utils::basedir(level), "/", sprite_path));
+         /* Either the level names a sprite, in which case it is relative
+          * to the level, or the sprite is the level's own name with the
+          * extension swapped. */
+         const char *named = attr_or(layer->attr, "player_sprite", "");
+         char        path[512];
 
-         /* from_sprite hands over ownership. */
+         if (*named)
+         {
+            const char *slash = strrchr(level, '/');
+            int         dir   = slash ? (int)(slash - level) : 1;
+
+            snprintf(path, sizeof(path), "%.*s/%s",
+                  slash ? dir : 1, slash ? level : ".", named);
+         }
+         else
+            snprintf(path, sizeof(path), "%s.sprite", level);
+
+         /* cache_sprite hands over ownership. */
          blit_surface_release(&player);
-         player = sprite;
+         player = Blit::cache_sprite(path);
       }
 
-      int x     = Utils::stoi(attr_or(layer->attr, "start_x", "1"));
-      int y     = Utils::stoi(attr_or(layer->attr, "start_y", "1"));
-      int off_x = Utils::stoi(attr_or(layer->attr, "player_offset_x", "0"));
-      int off_y = Utils::stoi(attr_or(layer->attr, "player_offset_y", "0"));
+      int x     = atoi(attr_or(layer->attr, "start_x", "1"));
+      int y     = atoi(attr_or(layer->attr, "start_y", "1"));
+      int off_x = atoi(attr_or(layer->attr, "player_offset_x", "0"));
+      int off_y = atoi(attr_or(layer->attr, "player_offset_y", "0"));
       const char *face = attr_or(layer->attr, "start_facing", "right");
 
       player.rect.pos = blit_pos(x * blit_tilemap_tile_width(map), y * blit_tilemap_tile_height(map));
@@ -147,14 +162,24 @@ namespace Icy
       if (font)
       {
          blit_font_cluster_set_id(font, "lime");
-         blit_font_cluster_render(font, &target, (Utils::join((chapter + 1), "-", (level + 1))).c_str(),
+         char hud[64];
+
+         snprintf(hud, sizeof(hud), "%u-%u", chapter + 1, level + 1);
+         blit_font_cluster_render(font, &target, hud,
                314, 184, BLIT_FONT_RIGHT, 0);
          if (!best_pushes)
-            blit_font_cluster_render(font, &target, (Utils::join(" Pushes:", pushes)).c_str(),
+         {
+            snprintf(hud, sizeof(hud), " Pushes:%u", pushes);
+            blit_font_cluster_render(font, &target, hud,
                2, 184, BLIT_FONT_LEFT, 0);
+         }
          else
-            blit_font_cluster_render(font, &target, (Utils::join(" Pushes:", pushes, " Best:", best_pushes)).c_str(),
+         {
+            snprintf(hud, sizeof(hud), " Pushes:%u Best:%u", pushes,
+                  best_pushes);
+            blit_font_cluster_render(font, &target, hud,
                2, 184, BLIT_FONT_LEFT, 0);
+         }
       }
 
       if (m_video_cb)
