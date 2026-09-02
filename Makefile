@@ -462,7 +462,28 @@ else
 endif
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -f $(OBJECTS) $(TARGET) $(TEST_BINARIES)
+	rm -f $(shell find . -name '*.o' 2>/dev/null)
+
+# The test programs in tests/. Not built by all: they need a host
+# toolchain and are meaningless when cross-compiling. Building them is
+# what keeps them compiling - the tilemap dump silently stopped after
+# the map reader moved to C, because nothing built it.
+#
+# The dump links against the core's objects, and the tilemap reaches the
+# surface cache which reaches the audio managers, whose mixer hooks live
+# in libretro.cpp. tests/stubs.c supplies those three.
+TEST_BINARIES = tests/harness tests/dump_tilemap
+TEST_CORE_OBJECTS = $(filter-out ./game.o ./game_manager.o ./libretro.o, $(OBJECTS))
+
+tests: $(TEST_BINARIES)
+
+tests/harness: tests/harness.c
+	$(CC) -O2 $(INCFLAGS) $< -o $@ -ldl
+
+tests/dump_tilemap: tests/dump_tilemap.c tests/stubs.c $(OBJECTS)
+	$(CC) -O2 -I. $(INCFLAGS) $(DEFINES) tests/dump_tilemap.c tests/stubs.c \
+		$(TEST_CORE_OBJECTS) -o $@ $(LIBS)
 
 install: all
 	mkdir -p $(LIBDIR) || /bin/true
@@ -470,5 +491,5 @@ install: all
 	install -d -m755 $(ASSETDIR)
 	cp -r dinothawr/* $(ASSETDIR)
 
-.PHONY: clean install
+.PHONY: clean install tests
 endif

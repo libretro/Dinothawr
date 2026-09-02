@@ -9,14 +9,7 @@
  * attributes. Rewriting the tilemap means diffing this output before and
  * after, and only then checking the hash.
  *
- * Build against the objects of the core you want to inspect:
- *
- *   make
- *   g++ -O1 -std=c++11 -DHAVE_RPNG -DHAVE_RWAV -DHAVE_RVORBIS \
- *       -I../libretro-common/include -I.. tests/dump_tilemap.cpp \
- *       $(ls *.o | grep -vE "^(game|game_manager|libretro|bg_manager|sfx_manager)\\.o") \
- *       $(find libretro-common audio -name '*.o' | grep -v neon) \
- *       -o dump_tilemap -lm -lpthread
+ * Built by `make tests`. Run:
  *
  *   ./dump_tilemap path/to/level_1-1.tmx > before.txt
  *

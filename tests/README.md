@@ -6,9 +6,17 @@ prints an FNV-1a hash of every frame the core hands back, plus the time
 spent inside `retro_run`.
 
 ```
-gcc -O2 -std=gnu99 -I../libretro-common/include harness.c -o harness -ldl
-./harness ../dinothawr_libretro.so <system-dir> <frames>
+make          # the core
+make tests    # harness and dump_tilemap, into tests/
+tests/harness dinothawr_libretro.so <system-dir> <frames>
 ```
+
+`make tests` is not part of `all`: the test programs need a host
+toolchain and are meaningless when cross-compiling. Build them anyway
+when you touch this core. Nothing built `dump_tilemap` for several
+patches after the map reader moved to C, and it had stopped compiling
+without anyone noticing - a dead oracle reads exactly like a passing
+one.
 
 `<system-dir>` is a directory containing a `dinothawr` directory of game
 assets.
