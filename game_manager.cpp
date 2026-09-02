@@ -153,9 +153,7 @@ namespace Icy
 
       for (rxml_node_t *node = blit_xml_child(game_node, "chapter"); node; node = blit_xml_next(node, "chapter"))
       {
-         Icy::GameManager::Chapter chapter = load_chapter(node, chapters.size());
-         if (chapter.num_levels() > 0)
-            chapters.push_back(std::move(chapter));
+         load_chapter(node, (int)chapters.count);
       }
 
       blit_render_target_release(&ui_target);
@@ -174,6 +172,7 @@ namespace Icy
     * it too. */
    void GameManager::release_owned()
    {
+      icy_level_list_release(&chapters);
       blit_font_cluster_free(font);
       font = NULL;
       blit_render_target_release(&target);
@@ -200,6 +199,8 @@ namespace Icy
     * nothing releases them either. */
    void GameManager::init_menu_surfaces()
    {
+      /* Plain C members in a C++ class: nothing initialises them. */
+      icy_level_list_init(&chapters);
       font = NULL;
       blit_render_target_init(&target);
       blit_render_target_init(&ui_target);
@@ -308,30 +309,44 @@ namespace Icy
          }
    }
 
-   GameManager::Chapter GameManager::load_chapter(rxml_node_t *chap, int chapter)
+   static blit_surface_t make_preview(const std::string& path,
+         const blit_surface_t& bg);
+
+   void GameManager::load_chapter(rxml_node_t *chap, int chapter)
    {
-      rxml_node_t  *node;
-      vector<Level> levels;
+      icy_chapter_t *loaded = icy_level_list_add_chapter(&chapters,
+            blit_xml_attr(chap, "name"));
+      rxml_node_t   *node;
+      int            i = 0;
+
+      if (!loaded)
+         throw std::bad_alloc();
 
       for (node = blit_xml_child(chap, "map"); node;
-            node = blit_xml_next(node, "map"))
+            node = blit_xml_next(node, "map"), i++)
       {
-         levels.push_back({path_join(dir, blit_xml_attr(node, "source")), game_bg});
-         levels.back().set_name(blit_xml_attr(node, "name"));
+         string         path    = path_join(dir, blit_xml_attr(node, "source"));
+         blit_surface_t preview = make_preview(path, game_bg);
+         icy_level_t   *level   = icy_chapter_add_level(loaded,
+               path.c_str(), blit_xml_attr(node, "name"), &preview);
+
+         blit_surface_release(&preview);
+
+         if (!level)
+            throw std::bad_alloc();
+
+         level->position = blit_pos(preview_base_x + i * preview_delta_x,
+               preview_base_y + preview_delta_y * chapter);
       }
 
-      int i = 0;
-      for (auto& level : levels)
+      loaded->minimum_clear = blit_xml_attr_int(chap, "minimum_clear");
+
+      /* A chapter with no levels is not one. */
+      if (!loaded->count)
       {
-         //cerr << "Found level: " << level.path() << endl;
-         level.pos(blit_pos(preview_base_x + i * preview_delta_x, preview_base_y + preview_delta_y * chapter));
-
-         i++;
+         free(loaded->name);
+         chapters.count--;
       }
-
-      Chapter loaded_chap = Chapter(std::move(levels), blit_xml_attr(chap, "name"));
-      loaded_chap.set_minimum_clear(blit_xml_attr_int(chap, "minimum_clear"));
-      return loaded_chap;
    }
 
    void GameManager::init_menu(const string& level)
@@ -362,9 +377,9 @@ namespace Icy
          char err[256];
 
          game.reset(icy_game_new(
-                  chapters.at(chapter).level(level).path().c_str(),
+                  chapters.chapters[chapter].levels[level].path,
                   chapter, level,
-                  chapters.at(chapter).level(level).get_best_pushes(),
+                  chapters.chapters[chapter].levels[level].best_pushes,
                   font, err, sizeof(err)));
 
          if (!game)
@@ -386,14 +401,15 @@ namespace Icy
 
    bool GameManager::find_next_unsolved_level(unsigned& current_chap, unsigned& current_level)
    {
-      if (current_chap == chapters.size() - 1 && current_level == chapters.back().num_levels() - 1)
+      if (current_chap == chapters.count - 1
+            && current_level == chapters.chapters[chapters.count - 1].count - 1)
          return false;
 
       unsigned chap = current_chap;
       unsigned level = current_level;
-      while (chap < chapters.size())
+      while (chap < chapters.count)
       {
-         if (!chapters[chap].get_completion(level))
+         if (!chapters.chapters[chap].levels[level].completed)
          {
             current_chap = chap;
             current_level = level;
@@ -401,9 +417,9 @@ namespace Icy
          }
 
          level++;
-         if (level >= chapters[chap].num_levels())
+         if (level >= chapters.chapters[chap].count)
          {
-            if (!chapters[chap].cleared())
+            if (!icy_chapter_cleared(&chapters.chapters[chap]))
                break;
 
             chap++;
@@ -423,8 +439,8 @@ namespace Icy
       m_current_level = 0;
       if (!find_next_unsolved_level(m_current_chap, m_current_level))
       {
-         chap_select = chapters.size() - 1;
-         level_select = chapters.back().num_levels() - 1;
+         chap_select = (int)chapters.count - 1;
+         level_select = (int)chapters.chapters[chapters.count - 1].count - 1;
       }
    }
 
@@ -461,11 +477,13 @@ namespace Icy
       if (menu_slide_dir.y == 0)
       {
          unsigned chap = chap_select;
-         if (chap < chapters.size() - 1 && !chapters[chap_select].cleared())
+         if (chap < chapters.count - 1
+               && !icy_chapter_cleared(&chapters.chapters[chap_select]))
             blit_render_target_blit(&ui_target, &lock_sprite, blit_rect_zero());
 
          // Render tick if level is complete.
-         if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
+         if (menu_slide_dir.x == 0
+               && chapters.chapters[chap_select].levels[level_select].completed)
             blit_render_target_blit(&ui_target, &level_complete, blit_rect_zero());
 
          blit_font_cluster_set_id(font, "white");
@@ -500,18 +518,33 @@ namespace Icy
 
       blit_render_target_blit(&ui_target, &level_select_bg, blit_rect_zero());
 
-      for (auto& chap : chapters)
-         for (auto& preview : chap.levels())
-            preview.render(ui_target);
+      render_previews();
 
       menu_render_ui();
 
       m_video_cb(m_video_ctx, ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(blit_pixel_t));
    }
 
-   const GameManager::Level& GameManager::get_selected_level() const
+   /* Every level's preview, at the position the level was given when the
+    * chapter loaded. */
+   void GameManager::render_previews()
    {
-      return chapters.at(chap_select).level(level_select);
+      size_t c;
+      size_t l;
+
+      for (c = 0; c < chapters.count; c++)
+         for (l = 0; l < chapters.chapters[c].count; l++)
+         {
+            icy_level_t *level = &chapters.chapters[c].levels[l];
+
+            blit_render_target_blit_offset(&ui_target, &level->preview,
+                  blit_rect_zero(), level->position);
+         }
+   }
+
+   const icy_level_t *GameManager::get_selected_level() const
+   {
+      return &chapters.chapters[chap_select].levels[level_select];
    }
 
    void GameManager::start_slide(blit_pos_t dir, unsigned cnt)
@@ -533,9 +566,7 @@ namespace Icy
    {
       blit_render_target_blit(&ui_target, &level_select_bg, blit_rect_zero());
 
-      for (auto& chap : chapters)
-         for (auto& preview : chap.levels())
-            preview.render(ui_target);
+      render_previews();
 
       menu_render_ui();
 
@@ -562,7 +593,7 @@ namespace Icy
          enum icy_menu_dir   dir;
          bool                pressed = true;
 
-         list.chapters = (unsigned)chapters.size();
+         list.chapters = (unsigned)chapters.count;
          list.levels   = menu_levels_cb;
          list.cleared  = menu_cleared_cb;
          list.ctx      = this;
@@ -628,25 +659,19 @@ namespace Icy
       if (icy_game_won(game.get()))
       {
          unsigned pushes = icy_game_pushes(game.get());
-         chapters[m_current_chap].level(m_current_level).set_best_pushes(pushes);
+         icy_level_record_clear(&chapters.chapters[m_current_chap].levels[m_current_level], pushes);
 
          game.reset();
-         bool trigger_completion = !chapters[m_current_chap].get_completion(m_current_level);
-         chapters[m_current_chap].set_completion(m_current_level, true);
+         bool trigger_completion = !chapters.chapters[m_current_chap].levels[m_current_level].completed;
+         chapters.chapters[m_current_chap].levels[m_current_level].completed = 1;
          save.serialize();
 
          // Go to ending screen on the event that all levels have been cleared.
          bool cleared_all = trigger_completion;
          if (trigger_completion)
          {
-            for (auto& chap : chapters)
-            {
-               if (chap.cleared_count() != chap.num_levels())
-               {
-                  cleared_all = false;
-                  break;
-               }
-            }
+            cleared_all = icy_level_list_cleared(&chapters)
+               == icy_level_list_total(&chapters);
          }
 
          if (cleared_all)
@@ -704,27 +729,21 @@ namespace Icy
 
    unsigned GameManager::total_levels() const
    {
-      unsigned levels = 0;
-      for (auto& chap : chapters)
-         levels += chap.num_levels();
-
-      return levels;
+      return icy_level_list_total(&chapters);
    }
 
    unsigned GameManager::total_cleared_levels() const
    {
-      unsigned levels = 0;
-      for (auto& chap : chapters)
-         levels += chap.cleared_count();
-
-      return levels;
+      return icy_level_list_cleared(&chapters);
    }
 
-   GameManager::Level::Level(const string& path, const blit_surface_t& bg)
-      : position(blit_pos_zero()), m_path(path), completion(false),
-      best_pushes(0)
+   /* Renders one frame of a level at half size, which is what the menu
+    * shows for it. */
+   static blit_surface_t make_preview(const string& path,
+         const blit_surface_t& bg)
    {
-      /* preview is a raw surface: it has no constructor to zero it. */
+      blit_surface_t preview;
+
       blit_surface_init(&preview);
 
       /* No font: a preview draws the level once and never a HUD. */
@@ -800,19 +819,10 @@ namespace Icy
          blit_surface_init_data(&preview, pdata);
          blit_surface_data_unref(pdata);
       }
-      pos(blit_pos_sub(
-               blit_pos_div(blit_pos(ICY_GAME_FB_WIDTH, ICY_GAME_FB_HEIGHT),
-                  scale_factor),
-               blit_pos(5, 5)));
+      return preview;
    }
 
-   void GameManager::Level::render(blit_render_target_t& target) const
-   {
-      //preview.rect().pos = position;
-      blit_render_target_blit_offset(&target, &preview, blit_rect_zero(), position);
-   }
-
-   GameManager::SaveManager::SaveManager(vector<GameManager::Chapter> &chaps)
+   GameManager::SaveManager::SaveManager(icy_level_list_t &chaps)
       : chaps(chaps)
    {
       save_data.resize(save_game_size);
@@ -832,11 +842,11 @@ namespace Icy
       std::vector<unsigned> per_chapter;
       size_t c;
 
-      for (c = 0; c < chaps.size(); c++)
+      for (c = 0; c < chaps.count; c++)
       {
-         per_chapter.push_back((unsigned)chaps[c].levels().size());
-         for (size_t l = 0; l < chaps[c].levels().size(); l++)
-            counts.push_back(chaps[c].levels()[l].get_best_pushes());
+         per_chapter.push_back((unsigned)chaps.chapters[c].count);
+         for (size_t l = 0; l < chaps.chapters[c].count; l++)
+            counts.push_back(chaps.chapters[c].levels[l].best_pushes);
       }
 
       icy_save_encode(save_data.data(), save_data.size(),
@@ -852,10 +862,10 @@ namespace Icy
       size_t c;
       size_t flat = 0;
 
-      for (c = 0; c < chaps.size(); c++)
+      for (c = 0; c < chaps.count; c++)
       {
-         per_chapter.push_back((unsigned)chaps[c].levels().size());
-         for (size_t l = 0; l < chaps[c].levels().size(); l++)
+         per_chapter.push_back((unsigned)chaps.chapters[c].count);
+         for (size_t l = 0; l < chaps.chapters[c].count; l++)
             counts.push_back(0);
       }
 
@@ -865,13 +875,11 @@ namespace Icy
       icy_save_decode(save_data.data(), save_data.size(), &counts[0],
             &per_chapter[0], per_chapter.size());
 
-      for (c = 0; c < chaps.size(); c++)
+      for (c = 0; c < chaps.count; c++)
       {
-         for (size_t l = 0; l < chaps[c].levels().size(); l++, flat++)
-         {
-            chaps[c].levels()[l].set_best_pushes(counts[flat]);
-            chaps[c].levels()[l].set_completion(counts[flat]);
-         }
+         for (size_t l = 0; l < chaps.chapters[c].count; l++, flat++)
+            icy_level_record_clear(&chaps.chapters[c].levels[l],
+                  counts[flat]);
       }
    }
 

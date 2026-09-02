@@ -12,6 +12,7 @@
 #include "icy_edge.h"
 #include "icy_rate.h"
 #include "icy_game.h"
+#include "icy_levels.h"
 #include "icy_input.h"
 #include "icy_leg.h"
 #include "icy_camera.h"
@@ -115,109 +116,10 @@ namespace Icy
 
       private:
 
-         class Level
-         {
-            public:
-               Level() : position(blit_pos_zero()),
-                  completion(false), best_pushes(0)
-               { blit_surface_init(&preview); }
-
-               /* preview is a raw surface, so the reference counting is
-                * explicit: Chapter keeps Levels in a vector. */
-               Level(const Level& other)
-                  : position(other.position), m_path(other.m_path),
-                  m_name(other.m_name), preview(other.preview),
-                  completion(other.completion),
-                  best_pushes(other.best_pushes)
-               { blit_surface_retain(&preview); }
-
-               Level& operator=(const Level& other)
-               {
-                  if (this != &other)
-                  {
-                     blit_surface_retain(&other.preview);
-                     blit_surface_release(&preview);
-
-                     position    = other.position;
-                     preview     = other.preview;
-                     m_path      = other.m_path;
-                     m_name      = other.m_name;
-                     completion  = other.completion;
-                     best_pushes = other.best_pushes;
-                  }
-                  return *this;
-               }
-
-               ~Level() { blit_surface_release(&preview); }
-
-               blit_pos_t pos() const { return position; }
-               void pos(blit_pos_t p) { position = p; }
-
-               Level(const std::string& path, const blit_surface_t& bg);
-               const std::string& path() const { return m_path; }
-
-               void set_name(const std::string& name) { m_name = name; }
-               const std::string& name() const { return m_name; }
-
-               void render(blit_render_target_t& target) const;
-
-               void set_completion(bool state) { completion = state; }
-               bool get_completion() const { return completion; }
-
-               void set_best_pushes(unsigned pushes) { if (!best_pushes || pushes < best_pushes) best_pushes = pushes; }
-               unsigned get_best_pushes() const { return best_pushes; }
-
-            private:
-               blit_pos_t position;
-               std::string m_path;
-               std::string m_name;
-               blit_surface_t preview;
-               bool completion;
-               unsigned best_pushes;
-         };
-
-         class Chapter
-         {
-            public:
-               Chapter() : minimum_clear(0) {}
-
-               Chapter(std::vector<Level> levels, const std::string& name) :
-                  m_levels(std::move(levels)), m_name(name), minimum_clear(0) {}
-
-               void set_minimum_clear(unsigned minimum) { minimum_clear = minimum; }
-               bool cleared() const
-               {
-                  return cleared_count() >= minimum_clear;
-               }
-
-               unsigned cleared_count() const
-               {
-                  unsigned clear_cnt = 0;
-                  for (std::vector<Icy::GameManager::Level>::const_iterator level = m_levels.begin(); level != m_levels.end(); level++)
-                     clear_cnt += level->get_completion();
-
-                  return clear_cnt;
-               }
-
-               void set_completion(unsigned level, bool state) { m_levels.at(level).set_completion(state); }
-               bool get_completion(unsigned level) const { return m_levels.at(level).get_completion(); }
-               const std::string& name() const { return m_name; }
-               const Level& level(unsigned i) const { return m_levels.at(i); }
-               Level& level(unsigned i) { return m_levels.at(i); }
-               const std::vector<Level>& levels() const { return m_levels; }
-               std::vector<Level>& levels() { return m_levels; }
-               unsigned num_levels() const { return m_levels.size(); }
-
-            private:
-               std::vector<Level> m_levels;
-               std::string m_name;
-               unsigned minimum_clear;
-         };
-
          class SaveManager
          {
             public:
-               SaveManager(std::vector<Chapter> &chaps);
+               SaveManager(icy_level_list_t &chaps);
 
                void *data();
                void serialize();
@@ -225,7 +127,7 @@ namespace Icy
                std::size_t size() const;
 
             private:
-               std::vector<Chapter> &chaps;
+               icy_level_list_t &chaps;
                std::vector<char> save_data;
                static const std::size_t save_game_size = 512;
          };
@@ -233,7 +135,7 @@ namespace Icy
          /* chapters must be declared before save: SaveManager holds a
           * reference to it and is handed that reference in the member
           * initialiser list, so it has to be constructed first. */
-         std::vector<Chapter> chapters;
+         icy_level_list_t chapters;
 
          SaveManager save;
 
@@ -268,12 +170,14 @@ namespace Icy
           * GameManager as their context. */
       public:
          unsigned chapter_level_count(unsigned chapter) const
-         { return chapter < chapters.size()
-            ? (unsigned)chapters[chapter].num_levels() : 0; }
+         { return chapter < chapters.count
+            ? (unsigned)chapters.chapters[chapter].count : 0; }
          bool chapter_is_cleared(unsigned chapter) const
-         { return chapter < chapters.size() && chapters[chapter].cleared(); }
+         { return chapter < chapters.count
+            && icy_chapter_cleared(&chapters.chapters[chapter]) != 0; }
 
       private:
+         void render_previews();
          void init_menu_surfaces();
          void release_owned();
          void init_menu(const std::string& title);
@@ -282,8 +186,8 @@ namespace Icy
          void init_sfx(rxml_node_t* game_node);
          void init_bg(rxml_node_t* game_node);
 
-         Chapter load_chapter(rxml_node_t* chap_node, int chapter);
-         const Level& get_selected_level() const;
+         void load_chapter(rxml_node_t *chap, int chapter);
+         const icy_level_t *get_selected_level() const;
 
          void step_title();
          void step_game();

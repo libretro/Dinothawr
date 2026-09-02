@@ -35,6 +35,7 @@ SOURCES_C += $(CORE_DIR)/icy_tiles.c
 SOURCES_C += $(CORE_DIR)/icy_path.c
 SOURCES_C += $(CORE_DIR)/icy_rate.c
 SOURCES_C += $(CORE_DIR)/icy_game.c
+SOURCES_C += $(CORE_DIR)/icy_levels.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_f32.c
 SOURCES_C += $(CORE_DIR)/audio/mixer_i16.c
 SOURCES_C += $(CORE_DIR)/audio/vorbis_f32.c
