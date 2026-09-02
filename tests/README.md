@@ -30,6 +30,20 @@ teardown is exercised. A single load hides anything that only repeats.
 The same two invocations under ASan/UBSan/LSan and under TSan are what
 the core is swept with before a commit.
 
+## The save
+
+The game's save is SRAM, not the serialize entry points - those return
+zero - so a run that only checks frames never touches it. The harness
+hashes `retro_get_memory_data(RETRO_MEMORY_SAVE_RAM)` before unloading
+and prints the size and hash; `SRAM_DUMP=path` writes the bytes out.
+
+Read that hash for what it currently is. The scripted input walks and
+pushes but does not clear a level, so the save never changes during a
+run and the hash only covers the empty-save encoding - it catches a
+change to the format or the size, not to what the game records. Making
+it cover more means input that actually completes a level, which is
+worth writing before anyone rewrites the save code in GameManager.
+
 ## Benchmarking
 
 Four things matter more than the numbers, all of them learned by getting

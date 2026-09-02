@@ -218,6 +218,8 @@ int main(int argc, char **argv)
    void (*retro_unload_game)(void);
    void (*retro_run)(void);
    void (*retro_reset)(void);
+   void  *(*retro_get_memory_data)(unsigned);
+   size_t (*retro_get_memory_size)(unsigned);
    size_t (*retro_serialize_size)(void);
    bool (*retro_serialize)(void*, size_t);
    bool (*retro_unserialize)(const void*, size_t);
@@ -259,6 +261,8 @@ int main(int argc, char **argv)
    SYM(retro_unload_game);
    SYM(retro_run);
    SYM(retro_reset);
+   SYM(retro_get_memory_data);
+   SYM(retro_get_memory_size);
    SYM(retro_serialize_size);
    SYM(retro_serialize);
    SYM(retro_unserialize);
@@ -332,6 +336,38 @@ int main(int argc, char **argv)
    }
 
    free(state);
+
+   /* The save lives in SRAM, not in the serialize entry points, so it
+    * is invisible to a run that only checks frames. Hash it: a change to
+    * the save format or to what the game records shows up here and
+    * nowhere else. */
+   {
+      const unsigned char *sram = (const unsigned char*)
+         retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+      size_t   len  = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+      uint64_t hash = 1469598103934665603ULL;
+      size_t   i;
+
+      for (i = 0; sram && i < len; i++)
+      {
+         hash ^= sram[i];
+         hash *= 1099511628211ULL;
+      }
+
+      fprintf(stderr, "sram: %llu bytes, %016llx\n",
+            (unsigned long long)len, (unsigned long long)hash);
+
+      if (getenv("SRAM_DUMP") && sram)
+      {
+         FILE *f = fopen(getenv("SRAM_DUMP"), "wb");
+         if (f)
+         {
+            fwrite(sram, 1, len, f);
+            fclose(f);
+         }
+      }
+   }
+
    retro_unload_game();
    retro_deinit();
    /* keep loaded so LSan can symbolise */
