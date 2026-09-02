@@ -1,7 +1,6 @@
 #ifndef BLIT_HPP__
 #define BLIT_HPP__
 
-#include "utils.hpp"
 #include "blit_pixel.h"
 #include "blit_geom.h"
 #include <algorithm>

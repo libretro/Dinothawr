@@ -3,11 +3,11 @@
 #include "icy_menu_select.h"
 #include "icy_edge.h"
 #include "icy_path.h"
+#include <cstdio>
 #include <new>
 #include <cstring>
 #include <cstdlib>
 #include "xml.hpp"
-#include "utils.hpp"
 
 #include <iostream>
 #include <cstdlib>
@@ -66,7 +66,12 @@ namespace Icy
       xml_doc doc;
 
       if (!doc.load(path_game.c_str()))
-         throw runtime_error(Utils::join("Failed to load game: ", path_game, "."));
+      {
+         char msg[512];
+         snprintf(msg, sizeof(msg), "Failed to load game: %s.",
+               path_game.c_str());
+         throw runtime_error(msg);
+      }
 
       /* pugixml's document was itself a node, so every lookup below
        * re-descended into <game>.  Take the element once. */
@@ -243,8 +248,12 @@ namespace Icy
             node = blit_xml_next(node, "sound"))
          if (!icy_sfx_add(icy_sfx(), blit_xml_attr(node, "name"),
                   path_join(dir, blit_xml_attr(node, "source")).c_str()))
-            throw runtime_error(Utils::join("Failed to load sound: ",
-                     blit_xml_attr(node, "source")));
+         {
+            char msg[512];
+            snprintf(msg, sizeof(msg), "Failed to load sound: %s",
+                  blit_xml_attr(node, "source"));
+            throw runtime_error(msg);
+         }
    }
 
    GameManager::Chapter GameManager::load_chapter(rxml_node_t *chap, int chapter)
@@ -297,12 +306,12 @@ namespace Icy
 
    void GameManager::change_level(unsigned chapter, unsigned level) 
    {
-      game = Utils::make_unique<Game>(
+      game.reset(new Game(
             chapters.at(chapter).level(level).path().c_str(), 
             chapter,
             level,
             chapters.at(chapter).level(level).get_best_pushes(),
-            font);
+            font));
       game->input_cb(m_input_cb, m_input_ctx);
       game->video_cb(m_video_cb, m_video_ctx);
       game->set_bg(game_bg);
@@ -389,6 +398,8 @@ namespace Icy
 
    void GameManager::menu_render_ui()
    {
+      char hud[64];
+
       if (menu_slide_dir.y == 0)
       {
          unsigned chap = chap_select;
@@ -400,19 +411,22 @@ namespace Icy
             blit_render_target_blit(&ui_target, &level_complete, blit_rect_zero());
 
          blit_font_cluster_set_id(font, "white");
-         blit_font_cluster_render(font, &ui_target,
-               Utils::join(chap_select + 1, "-", level_select + 1).c_str(),
+         snprintf(hud, sizeof(hud), "%d-%d", chap_select + 1,
+               level_select + 1);
+         blit_font_cluster_render(font, &ui_target, hud,
                240, 155, BLIT_FONT_RIGHT, 0);
       }
 
       blit_font_cluster_set_id(font, "lime");
-      blit_font_cluster_render(font, &ui_target,
-            Utils::join(total_cleared_levels(), "/", total_levels()).c_str(),
+      snprintf(hud, sizeof(hud), "%u/%u", total_cleared_levels(),
+            total_levels());
+      blit_font_cluster_render(font, &ui_target, hud,
             10, 185, BLIT_FONT_LEFT, 0);
 
-      blit_font_cluster_render(font, &ui_target,
-            Utils::join(100 * total_cleared_levels() / total_levels(),
-               "%").c_str(), 315, 185, BLIT_FONT_RIGHT, 0);
+      snprintf(hud, sizeof(hud), "%u%%",
+            100 * total_cleared_levels() / total_levels());
+      blit_font_cluster_render(font, &ui_target, hud,
+            315, 185, BLIT_FONT_RIGHT, 0);
    }
 
    void GameManager::step_menu_slide()

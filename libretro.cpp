@@ -7,15 +7,14 @@
 #include <cmath>
 
 #include "game.hpp"
-#include "utils.hpp"
 #include "audio/mixer_f32.h"
 
 #include <file/file_path.h>
 #include <streams/file_stream.h>
 
 #include "libretro_core_options.h"
+#include "icy_path.h"
 
-using namespace Blit::Utils;
 using namespace Icy;
 using namespace std;
 
@@ -361,8 +360,7 @@ static void refresh_video(void*, const void *data, unsigned width,
 
 static void load_game(const string& path)
 {
-   game = Blit::Utils::make_unique<GameManager>(path, poll_input,
-         refresh_video);
+   game.reset(new GameManager(path, poll_input, refresh_video));
 }
 
 void retro_reset(void)
@@ -385,7 +383,11 @@ bool retro_load_game(const struct retro_game_info* info)
    if (info && info->path)
    {
       game_path     = info->path;
-      game_path_dir = basedir(game_path);
+      {
+         char dir[512];
+         icy_path_dir(dir, sizeof(dir), game_path.c_str());
+         game_path_dir = dir;
+      }
    }
    else
    {
@@ -396,8 +398,15 @@ bool retro_load_game(const struct retro_game_info* info)
       if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) &&
           system_dir)
       {
-         game_path_dir = join(system_dir, "/", "dinothawr");
-         game_path     = join(game_path_dir, "/", "dinothawr.game");
+         {
+            char dir[512];
+            char file[512];
+
+            icy_path_join(dir, sizeof(dir), system_dir, "dinothawr");
+            icy_path_join(file, sizeof(file), dir, "dinothawr.game");
+            game_path_dir = dir;
+            game_path     = file;
+         }
 
          /* path_is_valid stats through the frontend's VFS, so a system
           * directory the frontend can reach but stdio cannot still

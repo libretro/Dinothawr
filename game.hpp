@@ -6,6 +6,7 @@
 
 #include <vector>
 #include "blit_tilemap.h"
+#include "blit_xml.h"
 #include "icy_menu_slide.h"
 #include "icy_edge.h"
 #include "icy_input.h"
@@ -18,6 +19,7 @@
 #include "audio/game_audio.h"
 
 #include <cstddef>
+#include <memory>
 #include <functional>
 #include <string>
 
