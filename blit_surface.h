@@ -71,6 +71,11 @@ void blit_surface_retain(const blit_surface_t *surf);
 /* Release every table and leave the struct empty. */
 void blit_surface_release(blit_surface_t *surf);
 
+/* Point @dst at what @src points at, taking a reference and releasing
+ * whatever @dst held. Retains before releasing, so assigning from a
+ * surface that shares tables with @dst is safe. */
+void blit_surface_assign(blit_surface_t *dst, const blit_surface_t *src);
+
 /* The pixel at @pos in surface coordinates, or NULL when outside. The
  * caller decides what an out-of-range read means; this does not throw
  * and does not report why.

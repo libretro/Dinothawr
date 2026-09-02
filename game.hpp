@@ -181,7 +181,7 @@ namespace Icy
          Game(const Game&) = delete;
          Game& operator=(const Game&) = delete;
 
-         void set_bg(const Blit::Surface& bg);
+         void set_bg(const blit_surface_t& bg);
 
          /* player is a raw surface, so face selection goes through the
           * C entry point; these keep the failure message the wrapper
@@ -283,6 +283,12 @@ namespace Icy
                std::function<void (const void*, unsigned, unsigned, std::size_t)> video_cb);
 
          GameManager();
+         ~GameManager();
+
+         /* The menu surfaces are raw and counted by hand, and a
+          * GameManager is a singleton held by unique_ptr. */
+         GameManager(const GameManager&) = delete;
+         GameManager& operator=(const GameManager&) = delete;
 
          void input_cb(std::function<bool (Input)> cb) { m_input_cb = cb; }
          void video_cb(std::function<void (const void*, unsigned, unsigned, std::size_t)> cb) { m_video_cb = cb; }
@@ -339,7 +345,7 @@ namespace Icy
                Blit::Pos pos() const { return position; }
                void pos(Blit::Pos p) { position = p; }
 
-               Level(const std::string& path, const Blit::Surface& bg);
+               Level(const std::string& path, const blit_surface_t& bg);
                const std::string& path() const { return m_path; }
 
                void set_name(const std::string& name) { m_name = name; }
@@ -435,16 +441,17 @@ namespace Icy
          Blit::RenderTarget ui_target;
          Blit::FontCluster font;
 
-         Blit::Surface lock_sprite;
+         blit_surface_t lock_sprite;
 
-         Blit::Surface level_complete;
-         Blit::Surface level_select_bg;
-         Blit::Surface end_credit_bg;
-         Blit::Surface game_bg;
+         blit_surface_t level_complete;
+         blit_surface_t level_select_bg;
+         blit_surface_t end_credit_bg;
+         blit_surface_t game_bg;
 
          std::function<bool (Input)> m_input_cb;
          std::function<void (const void*, unsigned, unsigned, std::size_t)> m_video_cb;
 
+         void init_menu_surfaces();
          void init_menu(const std::string& title);
          void init_menu_sprite(Blit::Xml::Node game_node);
          void init_level(unsigned chapter, unsigned level);

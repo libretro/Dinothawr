@@ -65,9 +65,9 @@ namespace Icy
       set_player_alt(player.active_alt ? player.active_alt : "", index);
    }
 
-   void Game::set_bg(const Blit::Surface& bg)
+   void Game::set_bg(const blit_surface_t& bg)
    {
-      this->bg = &bg.raw();
+      this->bg = &bg;
    }
 
    void Game::set_initial_pos(const string& level)

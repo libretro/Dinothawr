@@ -95,6 +95,15 @@ void blit_surface_release(blit_surface_t *surf)
    surf->active_alt = NULL;
 }
 
+void blit_surface_assign(blit_surface_t *dst, const blit_surface_t *src)
+{
+   blit_surface_t incoming = *src;
+
+   blit_surface_retain(&incoming);
+   blit_surface_release(dst);
+   *dst = incoming;
+}
+
 int blit_surface_set_active_alt(blit_surface_t *surf, const char *id,
       unsigned index)
 {

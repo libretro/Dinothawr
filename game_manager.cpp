@@ -29,6 +29,8 @@ namespace Icy
       slide_moved(blit_pos_zero()),
       slide_cnt(0), slide_end(1)
    {
+      init_menu_surfaces();
+
       Blit::Xml::Document doc;
 
       if (!doc.load_file(path_game.c_str()))
@@ -73,30 +75,77 @@ namespace Icy
       menu_slide_dir(blit_pos_zero()), slide_total(blit_pos_zero()),
       slide_moved(blit_pos_zero()),
       slide_cnt(0), slide_end(1)
-   {}
+   {
+      init_menu_surfaces();
+   }
+
+   /* The menu surfaces are raw structs: nothing zeroes them for us, and
+    * nothing releases them either. */
+   void GameManager::init_menu_surfaces()
+   {
+      blit_surface_init(&lock_sprite);
+      blit_surface_init(&level_complete);
+      blit_surface_init(&level_select_bg);
+      blit_surface_init(&end_credit_bg);
+      blit_surface_init(&game_bg);
+   }
+
+   GameManager::~GameManager()
+   {
+      blit_surface_release(&lock_sprite);
+      blit_surface_release(&level_complete);
+      blit_surface_release(&level_select_bg);
+      blit_surface_release(&end_credit_bg);
+      blit_surface_release(&game_bg);
+   }
 
    void GameManager::init_menu_sprite(Blit::Xml::Node game_node)
    {
-      level_complete = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("level_complete").attribute("source").value()));
+      {
+         Blit::Surface tmp = Blit::surface_cache().from_image(
+               Utils::join(dir, "/",
+                  game_node.child("level_complete").attribute("source").value()));
+         blit_surface_assign(&level_complete, &tmp.raw());
+      }
 
-      lock_sprite = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("lock_sprite").attribute("source").value()));
-      lock_sprite.ignore_camera(true);
-      int arrow_x = (Game::fb_width - lock_sprite.rect().w) / 2;
-      lock_sprite.rect().pos = blit_pos( arrow_x, 160 );
+      {
+         Blit::Surface tmp = Blit::surface_cache().from_image(
+               Utils::join(dir, "/",
+                  game_node.child("lock_sprite").attribute("source").value()));
+         blit_surface_assign(&lock_sprite, &tmp.raw());
+      }
+      lock_sprite.ignore_camera = 1;
+      int arrow_x = (Game::fb_width - lock_sprite.rect.w) / 2;
+      lock_sprite.rect.pos = blit_pos( arrow_x, 160 );
 
-      int complete_x = preview_base_x + Game::fb_width / 2 - level_complete.rect().w - 2;
-      int complete_y = preview_base_y + Game::fb_height / 2 - level_complete.rect().h - 2;
-      level_complete.rect().pos = blit_pos( complete_x, complete_y );
-      level_complete.ignore_camera(true);
+      int complete_x = preview_base_x + Game::fb_width / 2 - level_complete.rect.w - 2;
+      int complete_y = preview_base_y + Game::fb_height / 2 - level_complete.rect.h - 2;
+      level_complete.rect.pos = blit_pos( complete_x, complete_y );
+      level_complete.ignore_camera = 1;
 
-      level_select_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("menu_bg").attribute("source").value()));
-      level_select_bg.ignore_camera(true);
+      {
+         Blit::Surface tmp = Blit::surface_cache().from_image(
+               Utils::join(dir, "/",
+                  game_node.child("menu_bg").attribute("source").value()));
+         blit_surface_assign(&level_select_bg, &tmp.raw());
+      }
+      level_select_bg.ignore_camera = 1;
 
-      end_credit_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("end_bg").attribute("source").value()));
-      end_credit_bg.ignore_camera(true);
+      {
+         Blit::Surface tmp = Blit::surface_cache().from_image(
+               Utils::join(dir, "/",
+                  game_node.child("end_bg").attribute("source").value()));
+         blit_surface_assign(&end_credit_bg, &tmp.raw());
+      }
+      end_credit_bg.ignore_camera = 1;
 
-      game_bg = Blit::surface_cache().from_image(Utils::join(dir, "/", game_node.child("game_bg").attribute("source").value()));
-      game_bg.ignore_camera(true);
+      {
+         Blit::Surface tmp = Blit::surface_cache().from_image(
+               Utils::join(dir, "/",
+                  game_node.child("game_bg").attribute("source").value()));
+         blit_surface_assign(&game_bg, &tmp.raw());
+      }
+      game_bg.ignore_camera = 1;
    }
 
    void GameManager::init_bg(Blit::Xml::Node game_node)
@@ -280,11 +329,11 @@ namespace Icy
       {
          unsigned chap = chap_select;
          if (chap < chapters.size() - 1 && !chapters[chap_select].cleared())
-            ui_target.blit(lock_sprite, blit_rect_zero());
+            ui_target.blit(&lock_sprite, blit_rect_zero(), blit_pos_zero());
 
          // Render tick if level is complete.
          if (menu_slide_dir.x == 0 && chapters[chap_select].get_completion(level_select))
-            ui_target.blit(level_complete, blit_rect_zero());
+            ui_target.blit(&level_complete, blit_rect_zero(), blit_pos_zero());
 
          font.set_id("white");
          font.render_msg(ui_target, Utils::join(chap_select + 1,
@@ -318,7 +367,7 @@ namespace Icy
          menu_slide_dir = {};
       }
 
-      ui_target.blit(level_select_bg, blit_rect_zero());
+      ui_target.blit(&level_select_bg, blit_rect_zero(), blit_pos_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -353,7 +402,7 @@ namespace Icy
 
    void GameManager::step_menu()
    {
-      ui_target.blit(level_select_bg, blit_rect_zero());
+      ui_target.blit(&level_select_bg, blit_rect_zero(), blit_pos_zero());
 
       for (auto& chap : chapters)
          for (auto& preview : chap.levels())
@@ -499,7 +548,7 @@ namespace Icy
 
    void GameManager::step_end()
    {
-      ui_target.blit(end_credit_bg, blit_rect_zero());
+      ui_target.blit(&end_credit_bg, blit_rect_zero(), blit_pos_zero());
 
       bool pressed_menu_ok = m_input_cb(Input::Push);
       bool trigger_ok = pressed_menu_ok && !old_pressed_menu_ok;
@@ -552,7 +601,7 @@ namespace Icy
       return levels;
    }
 
-   GameManager::Level::Level(const string& path, const Blit::Surface& bg)
+   GameManager::Level::Level(const string& path, const blit_surface_t& bg)
       : position(blit_pos_zero()), m_path(path), completion(false),
       best_pushes(0)
    {
