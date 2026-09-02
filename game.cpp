@@ -158,7 +158,7 @@ namespace Icy
 
       player.rect.pos = blit_pos(x * blit_tilemap_tile_width(map), y * blit_tilemap_tile_height(map));
       player_off = blit_pos(off_x, off_y);
-      facing = (Input)icy_input_from_face(face);
+      facing = icy_input_from_face(face);
       set_player_alt(face);
    }
 
@@ -265,7 +265,7 @@ namespace Icy
             block->offset = player_off;
       }
 
-      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
+      m_won_early = (won_frame_cnt >= frame_per_iter * 3) && icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, ICY_INPUT_PUSH));
       return true;
    }
 
@@ -370,23 +370,23 @@ namespace Icy
 
    void Game::update_triggers()
    {
-      icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
+      icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, ICY_INPUT_PUSH));
    }
 
    void Game::update_input()
    {
-      bool push_trigger = icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, Input::Push));
+      bool push_trigger = icy_edge_pressed(&push, ICY_EDGE_OK, m_input_cb(m_input_ctx, ICY_INPUT_PUSH));
 
       if (push_trigger)
          push_block();
-      else if (m_input_cb(m_input_ctx, Input::Up))
-         move_if_no_collision(Input::Up);
-      else if (m_input_cb(m_input_ctx, Input::Down))
-         move_if_no_collision(Input::Down);
-      else if (m_input_cb(m_input_ctx, Input::Left))
-         move_if_no_collision(Input::Left);
-      else if (m_input_cb(m_input_ctx, Input::Right))
-         move_if_no_collision(Input::Right);
+      else if (m_input_cb(m_input_ctx, ICY_INPUT_UP))
+         move_if_no_collision(ICY_INPUT_UP);
+      else if (m_input_cb(m_input_ctx, ICY_INPUT_DOWN))
+         move_if_no_collision(ICY_INPUT_DOWN);
+      else if (m_input_cb(m_input_ctx, ICY_INPUT_LEFT))
+         move_if_no_collision(ICY_INPUT_LEFT);
+      else if (m_input_cb(m_input_ctx, ICY_INPUT_RIGHT))
+         move_if_no_collision(ICY_INPUT_RIGHT);
    }
 
    /* The check itself is grid arithmetic and lives in icy_collide.c;
@@ -407,7 +407,7 @@ namespace Icy
 
    void Game::push_block()
    {
-      blit_pos_t offset = icy_input_offset((enum icy_input)facing);
+      blit_pos_t offset = icy_input_offset(facing);
       blit_pos_t dir    = blit_pos_mul(offset,
             blit_pos(blit_tilemap_tile_width(map),
                blit_tilemap_tile_height(map)));
@@ -434,12 +434,12 @@ namespace Icy
       }
    }
 
-   void Game::move_if_no_collision(Input input)
+   void Game::move_if_no_collision(enum icy_input input)
    {
       facing = input;
-      set_player_alt(icy_input_face((enum icy_input)facing));
+      set_player_alt(icy_input_face(facing));
 
-      blit_pos_t offset = icy_input_offset((enum icy_input)input);
+      blit_pos_t offset = icy_input_offset(input);
       if (!is_offset_collision(player, offset))
       {
          begin_tile_stepper(player, offset);

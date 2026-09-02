@@ -353,23 +353,23 @@ void retro_run(void)
 /* Free functions rather than lambdas: both only ever read the frontend
  * callbacks, which are file-scope, so the captures were empty and the
  * std::function they were stored in outlived the scope that made them. */
-static bool poll_input(void*, Input input)
+static int poll_input(void*, enum icy_input input)
 {
    unsigned btn;
 
    switch (input)
    {
-      case Input::Up: btn = RETRO_DEVICE_ID_JOYPAD_UP; break;
-      case Input::Down: btn = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
-      case Input::Left: btn = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
-      case Input::Right: btn = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
-      case Input::Push: btn = RETRO_DEVICE_ID_JOYPAD_B; break;
-      case Input::Menu: btn = RETRO_DEVICE_ID_JOYPAD_A; break;
-      case Input::Reset: btn = RETRO_DEVICE_ID_JOYPAD_X; break;
-      default: return false;
+      case ICY_INPUT_UP: btn = RETRO_DEVICE_ID_JOYPAD_UP; break;
+      case ICY_INPUT_DOWN: btn = RETRO_DEVICE_ID_JOYPAD_DOWN; break;
+      case ICY_INPUT_LEFT: btn = RETRO_DEVICE_ID_JOYPAD_LEFT; break;
+      case ICY_INPUT_RIGHT: btn = RETRO_DEVICE_ID_JOYPAD_RIGHT; break;
+      case ICY_INPUT_PUSH: btn = RETRO_DEVICE_ID_JOYPAD_B; break;
+      case ICY_INPUT_MENU: btn = RETRO_DEVICE_ID_JOYPAD_A; break;
+      case ICY_INPUT_RESET: btn = RETRO_DEVICE_ID_JOYPAD_X; break;
+      default: return 0;
    }
 
-   return input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, btn);
+   return input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, btn) != 0;
 }
 
 static void refresh_video(void*, const void *data, unsigned width,

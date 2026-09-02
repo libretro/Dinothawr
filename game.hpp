@@ -65,26 +65,10 @@ namespace Icy
     * which is what keeps the default rate bit-for-bit what it was. */
    unsigned frames_to_ticks(unsigned frames60);
 
-   /* The C enum under a C++ name, so the values stay in one place and a
-    * cast between them is an identity. */
-   enum class Input : unsigned
-   {
-      Up    = ICY_INPUT_UP,
-      Down  = ICY_INPUT_DOWN,
-      Left  = ICY_INPUT_LEFT,
-      Right = ICY_INPUT_RIGHT,
-      Push  = ICY_INPUT_PUSH,
-      Menu  = ICY_INPUT_MENU,
-      Reset = ICY_INPUT_RESET,
-      None  = ICY_INPUT_NONE
-   };
-
-   /* The frontend's two hooks. Plain function pointers: the callers pass
-    * lambdas that capture nothing, and a std::function was carrying an
-    * empty capture through every frame's input read. */
-   typedef bool (*input_fn)(void *ctx, Input input);
-   typedef void (*video_fn)(void *ctx, const void *data, unsigned width,
-         unsigned height, std::size_t pitch);
+   /* The frontend's two hooks live in icy_input.h, so the C side of the
+    * game can hold them. */
+   typedef icy_input_fn input_fn;
+   typedef icy_video_fn video_fn;
 
    class Game
    {
@@ -142,7 +126,7 @@ namespace Icy
          blit_pos_t player_off;
          blit_font_cluster_t *font;
          const blit_surface_t *bg;
-         Input facing;
+         enum icy_input facing;
 
 
          unsigned won_frame_cnt;
@@ -193,7 +177,7 @@ namespace Icy
          void prepare_won_animation();
          void update_input();
          void update_triggers();
-         void move_if_no_collision(Input input);
+         void move_if_no_collision(enum icy_input input);
          void push_block();
          bool is_offset_collision(blit_surface_t& surf, blit_pos_t offset);
 

@@ -15,6 +15,8 @@
 #ifndef ICY_INPUT_H__
 #define ICY_INPUT_H__
 
+#include <stddef.h>
+
 #include "blit_geom.h"
 
 #ifdef __cplusplus
@@ -32,6 +34,12 @@ enum icy_input
    ICY_INPUT_RESET,
    ICY_INPUT_NONE
 };
+
+/* The frontend's two hooks, as the game sees them. Plain function
+ * pointers with a context, so a C struct can hold them. */
+typedef int  (*icy_input_fn)(void *ctx, enum icy_input input);
+typedef void (*icy_video_fn)(void *ctx, const void *data, unsigned width,
+      unsigned height, size_t pitch);
 
 /* One tile in @input's direction, or zero for a non-direction. */
 blit_pos_t icy_input_offset(enum icy_input input);

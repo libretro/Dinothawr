@@ -424,7 +424,7 @@ namespace Icy
 
    void GameManager::step_title()
    {
-      if (m_input_cb(m_input_ctx, Input::Push) || m_input_cb(m_input_ctx, Input::Menu))
+      if (m_input_cb(m_input_ctx, ICY_INPUT_PUSH) || m_input_cb(m_input_ctx, ICY_INPUT_MENU))
       {
          set_initial_level();
          enter_menu();
@@ -535,17 +535,17 @@ namespace Icy
 
       /* Edges, not levels: a held direction moves the cursor once. */
       bool pressed_menu_left  = icy_edge_pressed(&edges, ICY_EDGE_LEFT,
-            m_input_cb(m_input_ctx, Input::Left));
+            m_input_cb(m_input_ctx, ICY_INPUT_LEFT));
       bool pressed_menu_right = icy_edge_pressed(&edges, ICY_EDGE_RIGHT,
-            m_input_cb(m_input_ctx, Input::Right));
+            m_input_cb(m_input_ctx, ICY_INPUT_RIGHT));
       bool pressed_menu_up    = icy_edge_pressed(&edges, ICY_EDGE_UP,
-            m_input_cb(m_input_ctx, Input::Up));
+            m_input_cb(m_input_ctx, ICY_INPUT_UP));
       bool pressed_menu_down  = icy_edge_pressed(&edges, ICY_EDGE_DOWN,
-            m_input_cb(m_input_ctx, Input::Down));
+            m_input_cb(m_input_ctx, ICY_INPUT_DOWN));
       bool pressed_menu_ok    = icy_edge_pressed(&edges, ICY_EDGE_OK,
-            m_input_cb(m_input_ctx, Input::Push));
+            m_input_cb(m_input_ctx, ICY_INPUT_PUSH));
       bool pressed_menu       = icy_edge_pressed(&edges, ICY_EDGE_MENU,
-            m_input_cb(m_input_ctx, Input::Menu));
+            m_input_cb(m_input_ctx, ICY_INPUT_MENU));
 
       /* Navigation is index arithmetic over the chapter list, so it
        * lives in icy_menu_select.c; this turns a press into a direction
@@ -609,8 +609,8 @@ namespace Icy
 
       game->iterate();
 
-      bool pressed_menu = m_input_cb(m_input_ctx, Input::Menu);
-      bool pressed_reset = m_input_cb(m_input_ctx, Input::Reset);
+      bool pressed_menu = m_input_cb(m_input_ctx, ICY_INPUT_MENU);
+      bool pressed_reset = m_input_cb(m_input_ctx, ICY_INPUT_RESET);
 
       if (icy_edge_pressed(&edges, ICY_EDGE_RESET, pressed_reset))
          reset_level();
@@ -663,9 +663,9 @@ namespace Icy
       blit_render_target_blit(&ui_target, &end_credit_bg, blit_rect_zero());
 
       bool trigger_ok   = icy_edge_pressed(&edges, ICY_EDGE_OK,
-            m_input_cb(m_input_ctx, Input::Push));
+            m_input_cb(m_input_ctx, ICY_INPUT_PUSH));
       bool trigger_menu = icy_edge_pressed(&edges, ICY_EDGE_MENU,
-            m_input_cb(m_input_ctx, Input::Menu));
+            m_input_cb(m_input_ctx, ICY_INPUT_MENU));
 
       if (trigger_ok || trigger_menu)
          enter_menu();
@@ -735,7 +735,7 @@ namespace Icy
       struct preview_ctx { vector<blit_pixel_t> *data; int width; };
       preview_ctx ctx = { &data, preview_width };
 
-      game.input_cb([](void*, Input) { return false; });
+      game.input_cb([](void*, enum icy_input) { return 0; });
       game.video_cb([](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
          preview_ctx *c = static_cast<preview_ctx*>(ctxv);
          vector<blit_pixel_t>& data = *c->data;
