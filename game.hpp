@@ -173,7 +173,21 @@ namespace Icy
          int height() const { return map.pix_height(); }
 
          unsigned get_pushes() const { return pushes; }
+         ~Game();
+
+         /* player is a raw surface counted by hand, and a Game is only
+          * ever held by unique_ptr or as a local, so copying one is a
+          * mistake rather than something to support. */
+         Game(const Game&) = delete;
+         Game& operator=(const Game&) = delete;
+
          void set_bg(const Blit::Surface& bg);
+
+         /* player is a raw surface, so face selection goes through the
+          * C entry point; these keep the failure message the wrapper
+          * used to raise. */
+         void set_player_alt(const std::string& id, unsigned index = 0);
+         void set_player_alt_index(unsigned index);
 
          void iterate();
          bool won() const;
@@ -184,10 +198,10 @@ namespace Icy
       private:
          Blit::Tilemap map;
          Blit::RenderTarget target;
-         Blit::Surface player;
+         blit_surface_t player;
          Blit::Pos player_off;
          Blit::FontCluster *font;
-         const Blit::Surface *bg;
+         const blit_surface_t *bg;
          Input facing;
 
          CameraManager camera;

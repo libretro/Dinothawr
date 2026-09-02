@@ -356,6 +356,9 @@ namespace Blit
          void blit(const Surface& surf, Rect subrect)
          { blit_render_target_blit(&t, &surf.raw(), subrect); }
 
+         void blit(const blit_surface_t *surf, Rect subrect, Pos)
+         { blit_render_target_blit(&t, surf, subrect); }
+
          void blit_offset(const Surface& surf, Rect subrect, Pos offset)
          { blit_render_target_blit_offset(&t, &surf.raw(), subrect, offset); }
 

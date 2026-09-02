@@ -22,11 +22,14 @@ namespace Icy
    Game::Game(const string& level_path, unsigned chapter, unsigned level, unsigned best_pushes, Blit::FontCluster& font)
       : map(level_path), target(fb_width, fb_height),
          player_off(blit_pos_zero()), font(&font),
-         camera(target, player.rect(), blit_pos(map.pix_width(), map.pix_height())),
+         camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
    {
+      /* player is a raw surface: no constructor to zero it, and the
+       * destructor below is what releases it. */
+      blit_surface_init(&player);
       m_won_early = false;
       set_initial_pos(level_path);
       bg = NULL;
@@ -35,18 +38,36 @@ namespace Icy
    Game::Game(const string& level_path)
       : map(level_path), target(fb_width, fb_height),
          player_off(blit_pos_zero()), font(NULL),
-         camera(target, player.rect(), blit_pos(map.pix_width(), map.pix_height())),
+         camera(target, player.rect, blit_pos(map.pix_width(), map.pix_height())),
          won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
          leg_moved(0), push(true)
    {
+      blit_surface_init(&player);
       m_won_early = false;
       set_initial_pos(level_path);
       bg = NULL;
    }
 
+   Game::~Game()
+   {
+      blit_surface_release(&player);
+   }
+
+   void Game::set_player_alt(const string& id, unsigned index)
+   {
+      if (!blit_surface_set_active_alt(&player, id.c_str(), index))
+         throw logic_error(Utils::join("Player sprite has no face \"",
+                  id, "\" at index ", index, "."));
+   }
+
+   void Game::set_player_alt_index(unsigned index)
+   {
+      set_player_alt(player.active_alt ? player.active_alt : "", index);
+   }
+
    void Game::set_bg(const Blit::Surface& bg)
    {
-      this->bg = &bg;
+      this->bg = &bg.raw();
    }
 
    void Game::set_initial_pos(const string& level)
@@ -56,10 +77,18 @@ namespace Icy
          throw runtime_error("Floor layer not found.");
 
       std::basic_string<char> sprite_path = Utils::find_or_default(layer->attr, "player_sprite", "");
-      if (sprite_path.empty())
-         player = Blit::surface_cache().from_sprite(Utils::join(level, ".sprite"));
-      else
-         player = Blit::surface_cache().from_sprite(Utils::join(Utils::basedir(level), "/", sprite_path));
+      {
+         /* The cache hands back a wrapper; take the raw surface out of
+          * it and keep our own reference. */
+         Surface sprite = sprite_path.empty()
+            ? Blit::surface_cache().from_sprite(Utils::join(level, ".sprite"))
+            : Blit::surface_cache().from_sprite(
+                  Utils::join(Utils::basedir(level), "/", sprite_path));
+
+         blit_surface_release(&player);
+         player = sprite.raw();
+         blit_surface_retain(&player);
+      }
 
       int x     = Utils::stoi(Utils::find_or_default(layer->attr, "start_x", "1"));
       int y     = Utils::stoi(Utils::find_or_default(layer->attr, "start_y", "1"));
@@ -67,10 +96,10 @@ namespace Icy
       int off_y = Utils::stoi(Utils::find_or_default(layer->attr, "player_offset_y", "0"));
       std::basic_string<char> face = Utils::find_or_default(layer->attr, "start_facing", "right");
 
-      player.rect().pos = blit_pos(x * map.tile_width(), y * map.tile_height());
+      player.rect.pos = blit_pos(x * map.tile_width(), y * map.tile_height());
       player_off = blit_pos(off_x, off_y);
       facing = string_to_input(face);
-      player.active_alt(face);
+      set_player_alt(face);
    }
 
    void Game::iterate()
@@ -78,14 +107,14 @@ namespace Icy
       update_player();
 
       if (bg)
-         target.blit(*bg, blit_rect_zero());
+         target.blit(bg, blit_rect_zero(), blit_pos_zero());
       else
          target.clear(blit_pixel_argb(0x00, 0x00, 0x00, 0x00));
 
       camera.update();
 
       map.render(target);
-      target.blit_offset(player, blit_rect_zero(), player_off);
+      target.blit_offset(&player, blit_rect_zero(), player_off);
 
       if (font)
       {
@@ -145,7 +174,7 @@ namespace Icy
          bool jump = ((won_frame_cnt / frame_per_iter - 3) >> 1) & 1;
          unsigned last_jump = (((won_frame_cnt - 1) / frame_per_iter - 3) >> 1) & 1;
          state = jump ? "cheer" : "down";
-         player.active_alt(state);
+         set_player_alt(state);
 
          if (jump && !last_jump)
             get_sfx().play_sfx("dino_jump", 0.4);
@@ -238,7 +267,7 @@ namespace Icy
       else if (!stepper)
       {
          frame_cnt = 0;
-         player.active_alt_index(0);
+         set_player_alt_index(0);
       }
 
       if (stepper && player_walking)
@@ -263,7 +292,7 @@ namespace Icy
       else
          anim_index = (frame_cnt / period) % 4 + 1;
 
-      player.active_alt_index(anim_index);
+      set_player_alt_index(anim_index);
    }
 
    void Game::update_triggers()
@@ -355,13 +384,13 @@ namespace Icy
    {
       Blit::Pos offset = input_to_offset(facing);
       Blit::Pos dir    = offset * blit_pos(map.tile_width(), map.tile_height());
-      blit_surface_t *tile  = map.find_tile("blocks", player.rect().pos + dir);
+      blit_surface_t *tile  = map.find_tile("blocks", player.rect.pos + dir);
 
       if (!tile)
          return;
 
-      int tile_x = player.rect().pos.x / map.tile_width();
-      int tile_y = player.rect().pos.y / map.tile_height();
+      int tile_x = player.rect.pos.x / map.tile_width();
+      int tile_y = player.rect.pos.y / map.tile_height();
       Pos tile_pos = blit_pos(tile_x, tile_y);
 
       if (!map.collision(tile_pos + (2 * offset)))
@@ -370,7 +399,7 @@ namespace Icy
          begin_leg(offset.x ? map.tile_width() : map.tile_height());
          stepper_cnt = 0;
          player_walking = false;
-         player.active_alt_index(0);
+         set_player_alt_index(0);
          get_sfx().play_sfx("dino_push", 1.0);
          pushes++;
       }
@@ -379,12 +408,12 @@ namespace Icy
    void Game::move_if_no_collision(Input input)
    {
       facing = input;
-      player.active_alt(input_to_string(facing));
+      set_player_alt(input_to_string(facing));
 
       Blit::Pos offset = input_to_offset(input);
-      if (!is_offset_collision(player.raw(), offset))
+      if (!is_offset_collision(player, offset))
       {
-         stepper = bind(&Game::tile_stepper, this, ref(player.raw()), offset);
+         stepper = bind(&Game::tile_stepper, this, ref(player), offset);
          begin_leg(offset.x ? map.tile_width() : map.tile_height());
          player_walking = true;
       }
@@ -423,7 +452,7 @@ namespace Icy
       if (!player_walking)
       {
          unsigned alt = stepper_cnt < frames_to_ticks(push_anim_frames) ? 7 : 0;
-         player.active_alt_index(alt);
+         set_player_alt_index(alt);
          stepper_cnt++;
       }
 
@@ -440,16 +469,16 @@ namespace Icy
       {
          is_sliding = false;
 
-         if (&surf != &player.raw())
+         if (&surf != &player)
             get_sfx().play_sfx("ice_bump", 0.25);
 
          return false;
       }
 
-      //cerr << "Player: " << player.rect().pos << " Surf: " << surf->rect().pos << endl; 
+      //cerr << "Player: " << player.rect.pos << " Surf: " << surf->rect().pos << endl; 
       blit_surface_t *surface = map.find_tile("floor", surf.rect.pos);
       const char *slip = surface ? blit_attr_table_find(surface->attribs,
-            &surf == &player.raw() ? "slippery_player" : "slippery_block") : NULL;
+            &surf == &player ? "slippery_player" : "slippery_block") : NULL;
       bool slippery = slip && std::strcmp(slip, "true") == 0;
 
       is_sliding = slippery;
