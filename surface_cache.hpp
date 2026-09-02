@@ -1,5 +1,5 @@
-#ifndef SURFACE_HPP__
-#define SURFACE_HPP__
+#ifndef SURFACE_CACHE_HPP__
+#define SURFACE_CACHE_HPP__
 
 #include "blit.hpp"
 #include "blit_surface_data.h"
@@ -10,13 +10,9 @@
 #include "blit_surface_cluster.h"
 #include "blit_str_map.h"
 
-#include <memory>
 #include <new>
-#include <cstring>
+#include <string>
 #include <vector>
-#include <map>
-#include <functional>
-#include <utility>
 
 namespace Blit
 {
@@ -25,9 +21,9 @@ namespace Blit
    blit_surface_t surface_sub(const blit_surface_t& src, Rect rect);
 
 
-   /* A wrapper over blit_surface_cluster_t, so the engine's Renderable
-    * dispatch still reaches it. The elements belong to the C struct;
-    * this only forwards. */
+   /* A wrapper over blit_surface_cluster_t. The elements belong to the
+    * C struct; this adds the value semantics Tilemap's layers need and
+    * forwards everything else. */
    class SurfaceCluster
    {
       public:

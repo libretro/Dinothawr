@@ -1,4 +1,4 @@
-#include "surface.hpp"
+#include "surface_cache.hpp"
 #include "xml.hpp"
 #include "rpng_front.h"
 #include <stdexcept>

@@ -1,7 +1,7 @@
 #ifndef GAME_HPP__
 #define GAME_HPP__
 
-#include "surface.hpp"
+#include "surface_cache.hpp"
 #include "tilemap.hpp"
 #include "font.hpp"
 #include "audio/mixer_f32.h"
