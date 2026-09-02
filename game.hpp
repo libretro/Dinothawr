@@ -120,6 +120,18 @@ namespace Icy
          void iterate();
          bool won() const;
 
+         /* Level data that cannot be right - a sprite missing a face the
+          * game asks for, goal squares and blocks that do not match, a
+          * surface off the tile grid - is recorded rather than thrown
+          * from where it is noticed. iterate() raises it at the top of
+          * the next tick, so there is one place a broken level surfaces
+          * and one exception rather than one per site.
+          *
+          * This is also the shape the C form needs: nothing below here
+          * can throw, so nothing below here has to be a C++ function. */
+         void fail(const char *what);
+         bool failed() const { return m_failed; }
+
          static const unsigned fb_width = 320;
          static const unsigned fb_height = 200;
 
@@ -135,6 +147,8 @@ namespace Icy
 
          unsigned won_frame_cnt;
          bool m_won_early;
+         bool m_failed;
+         char m_error[192];
          /* Durations in 60 Hz frames; frames_to_ticks() turns them into
           * tick counts at the rate actually being run. */
          enum { won_frame_cnt_limit  = 60 * 5 };

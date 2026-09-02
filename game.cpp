@@ -45,6 +45,8 @@ namespace Icy
       stepper_dir  = blit_pos_zero();
       icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
+      m_failed    = false;
+      m_error[0]  = '\0';
       m_won_early = false;
       set_initial_pos(level_path);
       bg = NULL;
@@ -65,6 +67,8 @@ namespace Icy
       stepper_dir  = blit_pos_zero();
       icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
+      m_failed    = false;
+      m_error[0]  = '\0';
       m_won_early = false;
       set_initial_pos(level_path);
       bg = NULL;
@@ -77,14 +81,26 @@ namespace Icy
       blit_surface_release(&player);
    }
 
+   /* Recorded, not thrown: this is called from the middle of a tick and
+    * from the win animation, and iterate() is where a broken level is
+    * reported. */
+   void Game::fail(const char *what)
+   {
+      if (m_failed)
+         return;
+
+      m_failed = true;
+      snprintf(m_error, sizeof(m_error), "%s", what);
+   }
+
    void Game::set_player_alt(const char *id, unsigned index)
    {
       if (!blit_surface_set_active_alt(&player, id, index))
       {
-         char msg[256];
+         char msg[192];
          snprintf(msg, sizeof(msg),
                "Player sprite has no face \"%s\" at index %u.", id, index);
-         throw logic_error(msg);
+         fail(msg);
       }
    }
 
@@ -148,7 +164,14 @@ namespace Icy
 
    void Game::iterate()
    {
+      /* One place a broken level surfaces, and one exception for it. */
+      if (m_failed)
+         throw runtime_error(m_error);
+
       update_player();
+
+      if (m_failed)
+         throw runtime_error(m_error);
 
       if (bg)
          blit_render_target_blit(&target, bg, blit_rect_zero());
@@ -276,13 +299,22 @@ namespace Icy
       size_t i;
 
       if (floor_count != block_count)
-         throw logic_error("Number of goal floors and goal blocks do not match.");
+      {
+         fail("Number of goal floors and goal blocks do not match.");
+         return false;
+      }
 
       if (!floor_count)
-         throw logic_error("Goal floor or blocks are empty.");
+      {
+         fail("Goal floor or blocks are empty.");
+         return false;
+      }
 
       if (floor_count > max_tagged_tiles)
-         throw logic_error("Level has more goal tiles than the game can track.");
+      {
+         fail("Level has more goal tiles than the game can track.");
+         return false;
+      }
 
       for (i = 0; i < floor_count; i++)
       {
@@ -363,7 +395,12 @@ namespace Icy
    bool Game::is_offset_collision(blit_surface_t& surf, blit_pos_t offset)
    {
       if (!icy_collide_aligned(map, surf.rect))
-         throw logic_error("Offset collision check was performed outside tile grid.");
+      {
+         /* Report a collision so nothing moves further off the grid
+          * before iterate() raises this. */
+         fail("Offset collision check was performed outside tile grid.");
+         return true;
+      }
 
       return icy_collide_offset(map, surf.rect, offset) != 0;
    }
