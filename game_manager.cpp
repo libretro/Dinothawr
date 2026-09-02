@@ -1,6 +1,7 @@
 #include "game.hpp"
 #include "icy_save.h"
 #include "icy_menu_select.h"
+#include "icy_edge.h"
 #include <new>
 #include <cstring>
 #include <cstdlib>
@@ -38,12 +39,9 @@ namespace Icy
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
       m_input_cb(input_cb), m_video_cb(video_cb),
       chap_select(0), level_select(0),
-      old_pressed_menu_left(false), old_pressed_menu_right(false),
-      old_pressed_menu_up(false), old_pressed_menu_down(false),
-      old_pressed_menu_ok(false), old_pressed_menu(false),
-      old_pressed_reset(false),
       menu_slide_dir(blit_pos_zero())
    {
+      icy_edge_init(&edges);
       icy_menu_slide_init(&slide);
       init_menu_surfaces();
 
@@ -105,12 +103,9 @@ namespace Icy
       : save(chapters),
       m_current_chap(0), m_current_level(0), m_game_state(State::Game),
       chap_select(0), level_select(0),
-      old_pressed_menu_left(false), old_pressed_menu_right(false),
-      old_pressed_menu_up(false), old_pressed_menu_down(false),
-      old_pressed_menu_ok(false), old_pressed_menu(false),
-      old_pressed_reset(false),
       menu_slide_dir(blit_pos_zero())
    {
+      icy_edge_init(&edges);
       icy_menu_slide_init(&slide);
       init_menu_surfaces();
    }
@@ -370,8 +365,10 @@ namespace Icy
    void GameManager::enter_menu()
    {
       save.unserialize();
-      old_pressed_menu_ok = true; // We don't want to trigger level select right away.
-      old_pressed_menu = true;
+      /* Entering the menu from a press: do not act on the same press
+       * again on the first menu frame. */
+      icy_edge_suppress(&edges, ICY_EDGE_OK);
+      icy_edge_suppress(&edges, ICY_EDGE_MENU);
 
       m_game_state = State::Menu;
       level_select = m_current_level;
@@ -458,13 +455,19 @@ namespace Icy
 
       menu_render_ui();
 
-      // Check input. Start menu slide if selecting different level.
-      bool pressed_menu_left   = m_input_cb(Input::Left);
-      bool pressed_menu_right  = m_input_cb(Input::Right);
-      bool pressed_menu_up     = m_input_cb(Input::Up);
-      bool pressed_menu_down   = m_input_cb(Input::Down);
-      bool pressed_menu_ok     = m_input_cb(Input::Push);
-      bool pressed_menu			 = m_input_cb(Input::Menu);
+      /* Edges, not levels: a held direction moves the cursor once. */
+      bool pressed_menu_left  = icy_edge_pressed(&edges, ICY_EDGE_LEFT,
+            m_input_cb(Input::Left));
+      bool pressed_menu_right = icy_edge_pressed(&edges, ICY_EDGE_RIGHT,
+            m_input_cb(Input::Right));
+      bool pressed_menu_up    = icy_edge_pressed(&edges, ICY_EDGE_UP,
+            m_input_cb(Input::Up));
+      bool pressed_menu_down  = icy_edge_pressed(&edges, ICY_EDGE_DOWN,
+            m_input_cb(Input::Down));
+      bool pressed_menu_ok    = icy_edge_pressed(&edges, ICY_EDGE_OK,
+            m_input_cb(Input::Push));
+      bool pressed_menu       = icy_edge_pressed(&edges, ICY_EDGE_MENU,
+            m_input_cb(Input::Menu));
 
       /* Navigation is index arithmetic over the chapter list, so it
        * lives in icy_menu_select.c; this turns a press into a direction
@@ -483,13 +486,13 @@ namespace Icy
          cursor.chapter = (unsigned)chap_select;
          cursor.level   = (unsigned)level_select;
 
-         if (pressed_menu_left && !old_pressed_menu_left)
+         if (pressed_menu_left)
             dir = ICY_MENU_LEFT;
-         else if (pressed_menu_right && !old_pressed_menu_right)
+         else if (pressed_menu_right)
             dir = ICY_MENU_RIGHT;
-         else if (pressed_menu_up && !old_pressed_menu_up)
+         else if (pressed_menu_up)
             dir = ICY_MENU_UP;
-         else if (pressed_menu_down && !old_pressed_menu_down)
+         else if (pressed_menu_down)
             dir = ICY_MENU_DOWN;
          else
          {
@@ -513,17 +516,10 @@ namespace Icy
          }
       }
 
-      if (pressed_menu_ok && !old_pressed_menu_ok)
+      if (pressed_menu_ok)
          init_level(chap_select, level_select);
-      else if (pressed_menu && !old_pressed_menu && game)
+      else if (pressed_menu && game)
          m_game_state = State::Game;
-
-      old_pressed_menu_left   = pressed_menu_left;
-      old_pressed_menu_right  = pressed_menu_right;
-      old_pressed_menu_up     = pressed_menu_up;
-      old_pressed_menu_down   = pressed_menu_down;
-      old_pressed_menu_ok     = pressed_menu_ok;
-      old_pressed_menu        = pressed_menu;
 
       m_video_cb(ui_target.buffer, ui_target.rect.w, ui_target.rect.h, ui_target.rect.w * sizeof(Pixel));
    }
@@ -538,13 +534,11 @@ namespace Icy
       bool pressed_menu = m_input_cb(Input::Menu);
       bool pressed_reset = m_input_cb(Input::Reset);
 
-      if (pressed_reset && !old_pressed_reset)
+      if (icy_edge_pressed(&edges, ICY_EDGE_RESET, pressed_reset))
          reset_level();
-      else if (pressed_menu && !old_pressed_menu)
+      else if (icy_edge_pressed(&edges, ICY_EDGE_MENU, pressed_menu))
          enter_menu();
 
-      old_pressed_menu = pressed_menu;
-      old_pressed_reset = pressed_reset;
 
       if (game->won())
       {
@@ -573,7 +567,8 @@ namespace Icy
          if (cleared_all)
          {
             m_game_state = State::End;
-            old_pressed_menu_ok = true; // Don't allow us to exit immediately after we enter end credits.
+            /* Don't exit the credits on the press that opened them. */
+            icy_edge_suppress(&edges, ICY_EDGE_OK);
          }
          else
          {
@@ -589,12 +584,10 @@ namespace Icy
    {
       blit_render_target_blit(&ui_target, &end_credit_bg, blit_rect_zero());
 
-      bool pressed_menu_ok = m_input_cb(Input::Push);
-      bool trigger_ok = pressed_menu_ok && !old_pressed_menu_ok;
-      old_pressed_menu_ok = pressed_menu_ok;
-      bool pressed_menu = m_input_cb(Input::Menu);
-      bool trigger_menu = pressed_menu && !old_pressed_menu;
-      old_pressed_menu = pressed_menu;
+      bool trigger_ok   = icy_edge_pressed(&edges, ICY_EDGE_OK,
+            m_input_cb(Input::Push));
+      bool trigger_menu = icy_edge_pressed(&edges, ICY_EDGE_MENU,
+            m_input_cb(Input::Menu));
 
       if (trigger_ok || trigger_menu)
          enter_menu();

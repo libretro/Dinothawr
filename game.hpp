@@ -7,6 +7,7 @@
 #include <vector>
 #include "blit_tilemap.h"
 #include "icy_menu_slide.h"
+#include "icy_edge.h"
 #include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
@@ -420,13 +421,10 @@ namespace Icy
          unsigned total_levels() const;
          unsigned total_cleared_levels() const;
 
-         bool old_pressed_menu_left;
-         bool old_pressed_menu_right;
-         bool old_pressed_menu_up;
-         bool old_pressed_menu_down;
-         bool old_pressed_menu_ok;
-         bool old_pressed_menu;
-         bool old_pressed_reset;
+         /* One set rather than a flag per button: they are always
+          * sampled together, and the failure mode was one of them not
+          * being cleared with the rest. */
+         icy_edge_t edges;
 
          Blit::Pos menu_slide_dir;
 
