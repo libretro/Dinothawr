@@ -11,6 +11,7 @@
 #include "icy_menu_slide.h"
 #include "icy_edge.h"
 #include "icy_rate.h"
+#include "icy_game.h"
 #include "icy_input.h"
 #include "icy_leg.h"
 #include "icy_camera.h"
@@ -69,137 +70,6 @@ namespace Icy
     * game can hold them. */
    typedef icy_input_fn input_fn;
    typedef icy_video_fn video_fn;
-
-   class Game
-   {
-      public:
-         Game(const char *level_path, unsigned chapter, unsigned level, unsigned best_pushes, blit_font_cluster_t* font);
-         Game(const char *level_path);
-
-         void input_cb(input_fn cb, void *ctx = NULL)
-         { m_input_cb = cb; m_input_ctx = ctx; }
-         void video_cb(video_fn cb, void *ctx = NULL)
-         { m_video_cb = cb; m_video_ctx = ctx; }
-
-         int width() const { return blit_tilemap_pix_width(map); }
-         int height() const { return blit_tilemap_pix_height(map); }
-
-         unsigned get_pushes() const { return pushes; }
-         ~Game();
-
-         /* player is a raw surface counted by hand, and a Game is only
-          * ever held by unique_ptr or as a local, so copying one is a
-          * mistake rather than something to support. */
-         Game(const Game&) = delete;
-         Game& operator=(const Game&) = delete;
-
-         void set_bg(const blit_surface_t& bg);
-
-         /* player is a raw surface, so face selection goes through the
-          * C entry point; these keep the failure message the wrapper
-          * used to raise. */
-         void set_player_alt(const char *id, unsigned index = 0);
-         void set_player_alt_index(unsigned index);
-
-         void iterate();
-         bool won() const;
-
-         /* Level data that cannot be right - a sprite missing a face the
-          * game asks for, goal squares and blocks that do not match, a
-          * surface off the tile grid - is recorded rather than thrown
-          * from where it is noticed. iterate() raises it at the top of
-          * the next tick, so there is one place a broken level surfaces
-          * and one exception rather than one per site.
-          *
-          * This is also the shape the C form needs: nothing below here
-          * can throw, so nothing below here has to be a C++ function. */
-         void fail(const char *what);
-         bool failed() const { return m_failed; }
-
-         static const unsigned fb_width = 320;
-         static const unsigned fb_height = 200;
-
-      private:
-         blit_tilemap_t *map;
-         blit_render_target_t target;
-         blit_surface_t player;
-         blit_pos_t player_off;
-         blit_font_cluster_t *font;
-         const blit_surface_t *bg;
-         enum icy_input facing;
-
-
-         unsigned won_frame_cnt;
-         bool m_won_early;
-         bool m_failed;
-         char m_error[192];
-         /* Durations in 60 Hz frames; icy_frames_to_ticks() turns them into
-          * tick counts at the rate actually being run. */
-         enum { won_frame_cnt_limit  = 60 * 5 };
-         enum { won_frames_per_iter  = 24 };
-         enum { anim_frames_per_step = 10 };
-         enum { push_anim_frames     = 7 };
-         bool won_condition();
-
-         input_fn m_input_cb;
-         void    *m_input_ctx;
-         video_fn m_video_cb;
-         void    *m_video_ctx;
-
-         /* What is being stepped, if anything. There are exactly two
-          * things it can be - a surface crossing a tile, or the win
-          * animation - and a std::function was carrying a bound this,
-          * a reference to one of two surfaces, and a direction, to say
-          * which. Naming the two cases says the same thing without an
-          * indirect call or a captured reference to a member. */
-         enum class Stepper { None, Tile, WinAnimation };
-         Stepper   stepper;
-         blit_surface_t *stepper_surf;
-         blit_pos_t       stepper_dir;
-
-         void run_stepper();
-         void begin_tile_stepper(blit_surface_t& surf, blit_pos_t dir);
-
-         unsigned frame_cnt;
-         bool player_walking;
-         bool is_sliding;
-         unsigned stepper_cnt;
-
-         /* One tile of travel, interpolated across its ticks rather than
-          * advanced by a fixed 2 px, so it takes the same time at any
-          * rate and still lands exactly on the grid - see icy_leg.h. */
-         icy_leg_t leg;
-         void begin_leg(int tile_size);
-
-         void set_initial_pos(const char *level);
-         void update_player();
-         void update_animation();
-         void prepare_won_animation();
-         void update_input();
-         void update_triggers();
-         void move_if_no_collision(enum icy_input input);
-         void push_block();
-         bool is_offset_collision(blit_surface_t& surf, blit_pos_t offset);
-
-         bool tile_stepper(blit_surface_t& surf, blit_pos_t step_dir);
-         bool win_animation_stepper();
-
-         unsigned best_pushes;
-         unsigned pushes;
-         unsigned chapter;
-         unsigned level;
-
-
-         /* Fills @out with the layer's tiles carrying @attr, and returns
-          * how many there were. Levels have a handful of goal squares,
-          * so the caller sizes a fixed array rather than allocating. */
-         enum { max_tagged_tiles = 64 };
-         size_t get_tiles_with_attr(const char *layer, const char *attr,
-               const char *val, blit_cluster_elem_t **out);
-
-         /* Push is read as an edge: holding it pushes once. */
-         icy_edge_t push;
-   };
 
    class GameManager
    {
@@ -367,7 +237,10 @@ namespace Icy
 
          SaveManager save;
 
-         std::unique_ptr<Game> game;
+         /* The level in play, or nothing while in the menu. */
+         struct GameDeleter
+         { void operator()(icy_game_t *g) const { icy_game_free(g); } };
+         std::unique_ptr<icy_game_t, GameDeleter> game;
          std::string dir;
 
          unsigned m_current_chap;

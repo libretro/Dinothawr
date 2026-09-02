@@ -159,8 +159,8 @@ namespace Icy
       }
 
       blit_render_target_release(&ui_target);
-      if (!blit_render_target_init_size(&ui_target, Game::fb_width,
-               Game::fb_height))
+      if (!blit_render_target_init_size(&ui_target, ICY_GAME_FB_WIDTH,
+               ICY_GAME_FB_HEIGHT))
          throw std::bad_alloc();
       }
       catch (...)
@@ -229,11 +229,11 @@ namespace Icy
          blit_surface_release(&tmp);
       }
       lock_sprite.ignore_camera = 1;
-      int arrow_x = (Game::fb_width - lock_sprite.rect.w) / 2;
+      int arrow_x = (ICY_GAME_FB_WIDTH - lock_sprite.rect.w) / 2;
       lock_sprite.rect.pos = blit_pos( arrow_x, 160 );
 
-      int complete_x = preview_base_x + Game::fb_width / 2 - level_complete.rect.w - 2;
-      int complete_y = preview_base_y + Game::fb_height / 2 - level_complete.rect.h - 2;
+      int complete_x = preview_base_x + ICY_GAME_FB_WIDTH / 2 - level_complete.rect.w - 2;
+      int complete_y = preview_base_y + ICY_GAME_FB_HEIGHT / 2 - level_complete.rect.h - 2;
       level_complete.rect.pos = blit_pos( complete_x, complete_y );
       level_complete.ignore_camera = 1;
 
@@ -340,8 +340,8 @@ namespace Icy
             path_join(dir, level.c_str()).c_str());
 
       blit_render_target_release(&target);
-      if (!blit_render_target_init_size(&target, Game::fb_width,
-               Game::fb_height))
+      if (!blit_render_target_init_size(&target, ICY_GAME_FB_WIDTH,
+               ICY_GAME_FB_HEIGHT))
          throw std::bad_alloc();
       blit_render_target_blit(&target, &surf, blit_rect_zero());
       blit_surface_release(&surf);
@@ -358,15 +358,21 @@ namespace Icy
 
    void GameManager::change_level(unsigned chapter, unsigned level) 
    {
-      game.reset(new Game(
-            chapters.at(chapter).level(level).path().c_str(), 
-            chapter,
-            level,
-            chapters.at(chapter).level(level).get_best_pushes(),
-            font));
-      game->input_cb(m_input_cb, m_input_ctx);
-      game->video_cb(m_video_cb, m_video_ctx);
-      game->set_bg(game_bg);
+      {
+         char err[256];
+
+         game.reset(icy_game_new(
+                  chapters.at(chapter).level(level).path().c_str(),
+                  chapter, level,
+                  chapters.at(chapter).level(level).get_best_pushes(),
+                  font, err, sizeof(err)));
+
+         if (!game)
+            throw runtime_error(err);
+      }
+      icy_game_set_input_cb(game.get(), m_input_cb, m_input_ctx);
+      icy_game_set_video_cb(game.get(), m_video_cb, m_video_ctx);
+      icy_game_set_bg(game.get(), &game_bg);
 
       m_current_chap  = chapter;
       m_current_level = level;
@@ -607,7 +613,8 @@ namespace Icy
       if (!game)
          return;
 
-      game->iterate();
+      if (!icy_game_iterate(game.get()))
+         throw runtime_error(icy_game_error(game.get()));
 
       bool pressed_menu = m_input_cb(m_input_ctx, ICY_INPUT_MENU);
       bool pressed_reset = m_input_cb(m_input_ctx, ICY_INPUT_RESET);
@@ -618,9 +625,9 @@ namespace Icy
          enter_menu();
 
 
-      if (game->won())
+      if (icy_game_won(game.get()))
       {
-         unsigned pushes = game->get_pushes();
+         unsigned pushes = icy_game_pushes(game.get());
          chapters[m_current_chap].level(m_current_level).set_best_pushes(pushes);
 
          game.reset();
@@ -720,12 +727,19 @@ namespace Icy
       /* preview is a raw surface: it has no constructor to zero it. */
       blit_surface_init(&preview);
 
-      Game game{path.c_str()};
-      game.set_bg(bg);
+      /* No font: a preview draws the level once and never a HUD. */
+      char        err[256];
+      icy_game_t *preview_game = icy_game_new(path.c_str(), 0, 0, 0, NULL,
+            err, sizeof(err));
+
+      if (!preview_game)
+         throw runtime_error(err);
+
+      icy_game_set_bg(preview_game, &bg);
 
       static const unsigned scale_factor = 2;
-      int preview_width  = Game::fb_width / scale_factor;
-      int preview_height = Game::fb_height / scale_factor;
+      int preview_width  = ICY_GAME_FB_WIDTH / scale_factor;
+      int preview_height = ICY_GAME_FB_HEIGHT / scale_factor;
 
       vector<blit_pixel_t> data(preview_width * preview_height);
       blit_pixel_t *owned;
@@ -735,8 +749,10 @@ namespace Icy
       struct preview_ctx { vector<blit_pixel_t> *data; int width; };
       preview_ctx ctx = { &data, preview_width };
 
-      game.input_cb([](void*, enum icy_input) { return 0; });
-      game.video_cb([](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
+      icy_game_set_input_cb(preview_game,
+            [](void*, enum icy_input) { return 0; }, NULL);
+      icy_game_set_video_cb(preview_game,
+            [](void *ctxv, const void* pix_data, unsigned width, unsigned height, size_t pitch) {
          preview_ctx *c = static_cast<preview_ctx*>(ctxv);
          vector<blit_pixel_t>& data = *c->data;
          int preview_width = c->width;
@@ -759,7 +775,14 @@ namespace Icy
          }
       }, &ctx);
 
-      game.iterate();
+      if (!icy_game_iterate(preview_game))
+      {
+         std::string why = icy_game_error(preview_game);
+         icy_game_free(preview_game);
+         throw runtime_error(why);
+      }
+
+      icy_game_free(preview_game);
 
       {
          /* Surface takes its own reference; drop the one we made. */
@@ -778,7 +801,7 @@ namespace Icy
          blit_surface_data_unref(pdata);
       }
       pos(blit_pos_sub(
-               blit_pos_div(blit_pos(Game::fb_width, Game::fb_height),
+               blit_pos_div(blit_pos(ICY_GAME_FB_WIDTH, ICY_GAME_FB_HEIGHT),
                   scale_factor),
                blit_pos(5, 5)));
    }

@@ -124,7 +124,7 @@ void retro_get_system_info(struct retro_system_info *info)
 
 static void get_av_info(struct retro_system_av_info *info)
 {
-   unsigned width = Game::fb_width, height = Game::fb_height;
+   unsigned width = ICY_GAME_FB_WIDTH, height = ICY_GAME_FB_HEIGHT;
    info->timing   = { g_framerate, (double)AUDIO_SAMPLE_RATE };
    info->geometry = { width, height, width, height };
 }
