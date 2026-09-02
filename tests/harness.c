@@ -297,6 +297,28 @@ int main(int argc, char **argv)
       return 1;
    }
 
+   /* Inject a save before the first frame, so the parse path runs on
+    * something other than an empty buffer. retro_reset is what makes the
+    * game re-read it: it copies SRAM out, reloads, and copies back. */
+   if (getenv("SRAM_LOAD"))
+   {
+      FILE *f = fopen(getenv("SRAM_LOAD"), "rb");
+
+      if (f)
+      {
+         void  *sram = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+         size_t len  = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+
+         if (sram && len)
+         {
+            size_t got = fread(sram, 1, len, f);
+            (void)got;
+            retro_reset();
+         }
+         fclose(f);
+      }
+   }
+
    retro_get_system_av_info(&av);
    fprintf(stderr, "av: %ux%u @ %.2f, %.1f Hz\n",
          (unsigned)av.geometry.base_width, (unsigned)av.geometry.base_height,
