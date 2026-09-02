@@ -210,6 +210,7 @@ namespace Icy
             "true", goal_blocks);
 
       const unsigned frame_per_iter = frames_to_ticks(won_frames_per_iter);
+      size_t         i;
 
       const char *state = "frozen";
       if (won_frame_cnt >= 3 * frame_per_iter)
@@ -227,11 +228,16 @@ namespace Icy
       else if (won_frame_cnt >= 1 * frame_per_iter)
          state = "defrost1";
 
-      for (auto& block : goal_blocks)
+      /* Over the count, not the array: the array is fixed-size and only
+       * its first goal_block_count entries were filled. */
+      for (i = 0; i < goal_block_count; i++)
       {
+         blit_cluster_elem_t *block = goal_blocks[i];
+
          blit_surface_set_active_alt(&block->surf, state, 0);
 
-         // Shift defrosted block same way player sprite is (16x17, etc), but only when defrost kicks in.
+         /* Shift a defrosted block the same way the player sprite is
+          * shifted (16x17 and so on), but only once defrost starts. */
          if (won_frame_cnt >= 1 * frame_per_iter)
             block->offset = player_off;
       }

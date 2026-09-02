@@ -55,6 +55,19 @@ Run both. The default covers gameplay, `INPUT=menu` covers the front
 end, and combined with `SRAM_LOAD` it covers the front end with levels
 already cleared, which is a third set of states again.
 
+## What none of them reach
+
+No input here ever clears a level, so nothing runs the win check, the
+win animation, or the level-advance that follows. That is not a small
+corner: a bug sat in the win animation for two patches - it walked a
+fixed-size array to its end instead of to the number of entries filled,
+dereferencing uninitialised pointers - and every oracle in this
+directory passed the whole time.
+
+Fixing this means an input script that solves a level. `level_1-1` has
+one block and one goal, so it is the one to write first. Until then,
+treat anything downstream of won_condition() as untested.
+
 ## The save
 
 The game's save is SRAM, not the serialize entry points - those return
