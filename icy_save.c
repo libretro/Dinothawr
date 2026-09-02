@@ -4,6 +4,10 @@
 #include "icy_save.h"
 
 #include <stdio.h>
+
+/* snprintf is C99; this is libretro-common's shim for the MSVC
+ * versions that lack it. */
+#include <compat/msvc.h>
 #include <stdlib.h>
 #include <string.h>
 

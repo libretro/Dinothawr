@@ -2,6 +2,7 @@
 #include "icy_save.h"
 #include "icy_menu_select.h"
 #include "icy_edge.h"
+#include "icy_path.h"
 #include <new>
 #include <cstring>
 #include <cstdlib>
@@ -17,6 +18,22 @@ using namespace std;
 
 namespace Icy
 {
+   /* Small shims while GameManager still holds std::strings: the path
+    * work itself is icy_path.c. */
+   static std::string path_dir(const std::string& path)
+   {
+      char out[512];
+      icy_path_dir(out, sizeof(out), path.c_str());
+      return out;
+   }
+
+   static std::string path_join(const std::string& dir, const char *name)
+   {
+      char out[512];
+      icy_path_join(out, sizeof(out), dir.c_str(), name);
+      return out;
+   }
+
    /* Chapter list accessors for icy_menu_select.c. */
    extern "C" {
       static unsigned menu_levels_cb(void *ctx, unsigned chapter)
@@ -35,7 +52,7 @@ namespace Icy
    GameManager::GameManager(const string& path_game,
          input_fn input_cb,
          video_fn video_cb)
-      : save(chapters), dir(Utils::basedir(path_game)),
+      : save(chapters), dir(path_dir(path_game)),
       m_current_chap(0), m_current_level(0), m_game_state(State::Title),
       m_input_cb(input_cb), m_input_ctx(NULL),
       m_video_cb(video_cb), m_video_ctx(NULL),
@@ -55,8 +72,7 @@ namespace Icy
        * re-descended into <game>.  Take the element once. */
       rxml_node_t *game_node = blit_xml_root(doc.get(), "game");
 
-      string font_path = Utils::join(dir, "/",
-            blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
+      string font_path = path_join(dir, blit_xml_attr(blit_xml_child(game_node, "font"), "source"));
       char   err[256];
 
       if (!(font = blit_font_cluster_new()))
@@ -141,16 +157,14 @@ namespace Icy
    {
       {
          blit_surface_t tmp = Blit::cache_image(
-               Utils::join(dir, "/",
-                  blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
+               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "level_complete"), "source")));
          blit_surface_assign(&level_complete, &tmp);
          blit_surface_release(&tmp);
       }
 
       {
          blit_surface_t tmp = Blit::cache_image(
-               Utils::join(dir, "/",
-                  blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
+               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "lock_sprite"), "source")));
          blit_surface_assign(&lock_sprite, &tmp);
          blit_surface_release(&tmp);
       }
@@ -165,8 +179,7 @@ namespace Icy
 
       {
          blit_surface_t tmp = Blit::cache_image(
-               Utils::join(dir, "/",
-                  blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
+               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "menu_bg"), "source")));
          blit_surface_assign(&level_select_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -174,8 +187,7 @@ namespace Icy
 
       {
          blit_surface_t tmp = Blit::cache_image(
-               Utils::join(dir, "/",
-                  blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
+               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "end_bg"), "source")));
          blit_surface_assign(&end_credit_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -183,8 +195,7 @@ namespace Icy
 
       {
          blit_surface_t tmp = Blit::cache_image(
-               Utils::join(dir, "/",
-                  blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
+               path_join(dir, blit_xml_attr(blit_xml_child(game_node, "game_bg"), "source")));
          blit_surface_assign(&game_bg, &tmp);
          blit_surface_release(&tmp);
       }
@@ -206,7 +217,7 @@ namespace Icy
          const char *source = blit_xml_attr(node, "source");
          const char *volume = blit_xml_attr(node, "volume");
 
-         paths.push_back(Utils::join(dir, "/", source));
+         paths.push_back(path_join(dir, source));
          gains.push_back(*volume ? (float)std::strtod(volume, NULL) : 1.0f);
       }
 
@@ -231,8 +242,7 @@ namespace Icy
       for (node = blit_xml_child(sfx, "sound"); node;
             node = blit_xml_next(node, "sound"))
          if (!icy_sfx_add(icy_sfx(), blit_xml_attr(node, "name"),
-                  Utils::join(dir, "/",
-                     blit_xml_attr(node, "source")).c_str()))
+                  path_join(dir, blit_xml_attr(node, "source")).c_str()))
             throw runtime_error(Utils::join("Failed to load sound: ",
                      blit_xml_attr(node, "source")));
    }
@@ -245,8 +255,7 @@ namespace Icy
       for (node = blit_xml_child(chap, "map"); node;
             node = blit_xml_next(node, "map"))
       {
-         levels.push_back({Utils::join(dir, "/",
-                  blit_xml_attr(node, "source")), game_bg});
+         levels.push_back({path_join(dir, blit_xml_attr(node, "source")), game_bg});
          levels.back().set_name(blit_xml_attr(node, "name"));
       }
 
@@ -267,7 +276,7 @@ namespace Icy
    void GameManager::init_menu(const string& level)
    {
       blit_surface_t surf = Blit::cache_image(
-            Utils::join(dir, "/", level));
+            path_join(dir, level.c_str()));
 
       blit_render_target_release(&target);
       if (!blit_render_target_init_size(&target, Game::fb_width,
