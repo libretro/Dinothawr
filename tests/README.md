@@ -92,7 +92,7 @@ a result wrong first:
 
 ## Rewriting a parser
 
-`dump_tilemap.cpp` prints everything a `.tmx` parse produced - layer
+`dump_tilemap.c` prints everything a `.tmx` parse produced - layer
 names and attributes, every tile's position, size and attributes, and
 the collision grid - in a stable order.
 

@@ -16,6 +16,7 @@
 #include "blit_surface_cache.h"
 #include "blit_tile_set.h"
 #include "blit_xml.h"
+#include "icy_path.h"
 
 #define BLIT_TILEMAP_PATH_MAX 512
 
@@ -150,7 +151,7 @@ static int map_add_tileset(blit_tilemap_t *map, blit_tile_set_t *tiles,
                "property")))
       return 0;
 
-   snprintf(path, sizeof(path), "%s/%s", map->dir, source);
+   icy_path_join(path, sizeof(path), map->dir, source);
 
    /* An .apng tileset carries one tile per frame, in the same row-major
     * order the sheet was cut in, so the local tile id is the frame
@@ -270,7 +271,7 @@ static int map_add_tileset(blit_tilemap_t *map, blit_tile_set_t *tiles,
          blit_surface_t from_sprite;
          char           sprite_path[BLIT_TILEMAP_PATH_MAX];
 
-         snprintf(sprite_path, sizeof(sprite_path), "%s/%s", map->dir,
+         icy_path_join(sprite_path, sizeof(sprite_path), map->dir,
                sprite);
 
          if (!blit_surface_cache_sprite(blit_surface_cache(),
@@ -409,17 +410,7 @@ blit_tilemap_t *blit_tilemap_load(const char *path, char *error,
    map->error     = error;
    map->error_len = error_len;
 
-   {
-      const char *slash = strrchr(path, '/');
-      size_t      n     = slash ? (size_t)(slash - path) : 0;
-
-      if (n >= sizeof(map->dir))
-         n = sizeof(map->dir) - 1;
-      memcpy(map->dir, path, n);
-      map->dir[n] = '\0';
-      if (!slash)
-         strcpy(map->dir, ".");
-   }
+   icy_path_dir(map->dir, sizeof(map->dir), path);
 
    if (!(doc = blit_xml_load(path)))
    {

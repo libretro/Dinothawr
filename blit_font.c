@@ -13,6 +13,7 @@
 
 #include "blit_surface_cache.h"
 #include "blit_xml.h"
+#include "icy_path.h"
 
 #define BLIT_FONT_PATH_MAX 512
 
@@ -78,19 +79,8 @@ int blit_font_load(blit_font_t *font, const char *path, char *error,
    font->glyph_h = blit_xml_attr_int(glyphs, "glyphheight");
    ascii         = blit_xml_attr_int(glyphs, "startascii");
 
-   {
-      const char *slash = strrchr(path, '/');
-      size_t      n     = slash ? (size_t)(slash - path) : 0;
-
-      if (n >= sizeof(dir))
-         n = sizeof(dir) - 1;
-      memcpy(dir, path, n);
-      dir[n] = '\0';
-      if (!slash)
-         strcpy(dir, ".");
-   }
-
-   snprintf(source, sizeof(source), "%s/%s", dir,
+   icy_path_dir(dir, sizeof(dir), path);
+   icy_path_join(source, sizeof(source), dir,
          blit_xml_attr(glyphs, "source"));
 
    rxml_free_document(doc);

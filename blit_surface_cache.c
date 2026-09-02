@@ -14,6 +14,7 @@
 #include "blit_alt_table.h"
 #include "blit_str_map.h"
 #include "blit_xml.h"
+#include "icy_path.h"
 #include "rpng_front.h"
 
 #define BLIT_CACHE_PATH_MAX 512
@@ -41,27 +42,6 @@ static void cache_fail(blit_surface_cache_t *cache, const char *what,
 {
    snprintf(cache->error, sizeof(cache->error), "%s: %s", what,
          path ? path : "");
-}
-
-/* Directory part of @path, or "." when it has none. */
-static void cache_basedir(const char *path, char *out, size_t len)
-{
-   const char *slash = strrchr(path, '/');
-   size_t      n;
-
-   if (!slash)
-   {
-      out[0] = '.';
-      out[1] = '\0';
-      return;
-   }
-
-   n = (size_t)(slash - path);
-   if (n >= len)
-      n = len - 1;
-
-   memcpy(out, path, n);
-   out[n] = '\0';
 }
 
 blit_surface_cache_t *blit_surface_cache(void)
@@ -291,7 +271,7 @@ static blit_sprite_def_t *cache_parse_sprite(blit_surface_cache_t *cache,
       goto error;
    }
 
-   cache_basedir(path, basedir, sizeof(basedir));
+   icy_path_dir(basedir, sizeof(basedir), path);
    sprite = blit_xml_root(doc, "sprite");
 
    for (face = blit_xml_child(sprite, "face"); face;
@@ -302,7 +282,7 @@ static blit_sprite_def_t *cache_parse_sprite(blit_surface_cache_t *cache,
       blit_surface_data_t *data;
       char                 face_path[BLIT_CACHE_PATH_MAX];
 
-      snprintf(face_path, sizeof(face_path), "%s/%s", basedir,
+      icy_path_join(face_path, sizeof(face_path), basedir,
             blit_xml_attr(face, "source"));
 
       data = *frame
