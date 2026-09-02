@@ -38,14 +38,14 @@ namespace Icy
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(font),
          camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
-         won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
-         leg_moved(0), best_pushes(best_pushes), pushes(0),
+         won_frame_cnt(0), is_sliding(false), best_pushes(best_pushes), pushes(0),
          chapter(chapter), level(level), push(true) 
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
          throw std::bad_alloc();
       /* player is a raw surface: no constructor to zero it, and the
        * destructor below is what releases it. */
+      icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
       m_won_early = false;
       set_initial_pos(level_path);
@@ -56,11 +56,11 @@ namespace Icy
       : map(load_map(level_path)),
          player_off(blit_pos_zero()), font(NULL),
          camera(target, player.rect, blit_pos(blit_tilemap_pix_width(map), blit_tilemap_pix_height(map))),
-         won_frame_cnt(0), is_sliding(false), leg_tick(0), leg_ticks(1),
-         leg_moved(0), push(true)
+         won_frame_cnt(0), is_sliding(false), push(true)
    {
       if (!blit_render_target_init_size(&target, fb_width, fb_height))
          throw std::bad_alloc();
+      icy_leg_begin(&leg, 1);
       blit_surface_init(&player);
       m_won_early = false;
       set_initial_pos(level_path);
@@ -415,29 +415,14 @@ namespace Icy
     * the grid exactly at the end of the leg whatever the rate. */
    void Game::begin_leg(int tile_size)
    {
-      leg_tick  = 0;
-      leg_ticks = frames_to_ticks(tile_size / 2);
-      leg_moved = 0;
+      icy_leg_begin(&leg, frames_to_ticks(tile_size / 2));
    }
 
    bool Game::tile_stepper(blit_surface_t& surf, Pos step_dir)
    {
       int tile_size = step_dir.x ? blit_tilemap_tile_width(map) : blit_tilemap_tile_height(map);
-      int want;
 
-      /* leg_ticks is fixed for the duration of a leg - begin_leg() is the
-       * only writer, and it runs when a leg starts, never during one.
-       * That is what guarantees want reaches exactly tile_size on the
-       * last tick, so a surface always comes to rest on the tile grid
-       * even if the frame rate changed while it was in flight. A rate
-       * change is picked up by the next leg. */
-      leg_tick++;
-      want = (int)((unsigned)tile_size * leg_tick / leg_ticks);
-      if (want > tile_size)
-         want = tile_size;
-
-      surf.rect += (want - leg_moved) * step_dir;
-      leg_moved    = want;
+      surf.rect += icy_leg_step(&leg, tile_size) * step_dir;
 
       if (!player_walking)
       {
@@ -446,11 +431,7 @@ namespace Icy
          stepper_cnt++;
       }
 
-      /* Mid-leg. The tick count decides this rather than grid alignment:
-       * at rates above 2 ticks per pixel the first ticks of a leg round
-       * to zero movement, which leaves the surface still aligned and
-       * would otherwise read as a completed leg. */
-      if (leg_tick < leg_ticks)
+      if (!icy_leg_done(&leg))
          return true;
 
       begin_leg(tile_size);

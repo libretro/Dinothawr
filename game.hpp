@@ -9,6 +9,7 @@
 #include "icy_menu_slide.h"
 #include "icy_edge.h"
 #include "icy_input.h"
+#include "icy_leg.h"
 #include <map>
 #include "blit_font.h"
 #include "audio/mixer_f32.h"
@@ -162,14 +163,10 @@ namespace Icy
          bool is_sliding;
          unsigned stepper_cnt;
 
-         /* A tile_stepper leg - one tile of travel - is interpolated
-          * across leg_ticks ticks rather than advanced by a fixed 2 px,
-          * so it takes the same time at any rate and still lands exactly
-          * on the grid. leg_moved is how far into the tile the surface
-          * has been carried so far. */
-         unsigned leg_tick;
-         unsigned leg_ticks;
-         int      leg_moved;
+         /* One tile of travel, interpolated across its ticks rather than
+          * advanced by a fixed 2 px, so it takes the same time at any
+          * rate and still lands exactly on the grid - see icy_leg.h. */
+         icy_leg_t leg;
          void begin_leg(int tile_size);
 
          void set_initial_pos(const std::string& level);
