@@ -85,6 +85,7 @@ stages:
   - build-prepare
   - build-shared
   - build-static
+  - test
 
 ##############################################################################
 #################################### STAGES ##################################
@@ -213,3 +214,28 @@ libretro-build-webos-armv7a:
   extends:
     - .libretro-webos-armv7a-make-default
     - .core-defs
+
+##############################################################################
+#################################### TESTS ###################################
+##############################################################################
+# The checks in tests/, run against the assets in this repository.
+#
+# Deliberately not built on any of the templates above: those cross-compile,
+# and these have to run what they build. A plain image with a compiler is
+# everything this needs - the harness dlopens the core and the assets are
+# in the tree.
+#
+# The point of running them here is that a test nothing builds stops
+# compiling without anyone noticing: tests/dump_tilemap did exactly that
+# when the map reader moved to C, and read as passing the whole time
+# because nothing ran it.
+test-linux-x64:
+  stage: test
+  image: debian:bookworm
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential
+  script:
+    - make -j$(nproc)
+    - make tests
+    - ./tests/run.sh
